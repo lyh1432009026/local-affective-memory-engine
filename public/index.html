@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>伴生引擎控制台 · Local Affective Memory Engine</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --accent: #06b6d4;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --radius: 10px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Header */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: var(--shadow);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-logo { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: bold; }
+    .brand-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+    .header-status { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: #ecfdf5; color: #047857; font-weight: 600; font-size: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+
+    /* Layout */
+    .app-container { display: flex; flex: 1; }
+    nav.sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); color: var(--text-muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s ease; user-select: none; }
+    .nav-item:hover { background: var(--surface-subtle); color: var(--text); }
+    .nav-item.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+    .nav-item .icon { font-size: 18px; width: 22px; text-align: center; }
+
+    main.content { flex: 1; padding: 24px 32px; max-width: 1200px; margin: 0 auto; width: 100%; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Common Card Styles */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--surface-subtle); }
+    .card-title { font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .card-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Form & Input Elements */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .form-help { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .form-control { width: 100%; padding: 9px 12px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); transition: border-color 0.15s; outline: none; }
+    .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+    textarea.form-control { resize: vertical; min-height: 70px; line-height: 1.5; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--surface-subtle); border-color: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* Persona Selector Cards */
+    .persona-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .persona-card { border: 2px solid var(--border); border-radius: var(--radius); padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; background: var(--surface); }
+    .persona-card:hover { border-color: #cbd5e1; transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+    .persona-card.active { border-color: var(--primary); background: #faf5ff; }
+    .persona-card-badge { position: absolute; top: 12px; right: 12px; background: var(--primary); color: white; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 12px; }
+    .persona-card-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+    .persona-card-role { font-size: 12px; color: var(--text-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* Tag Pills */
+    .pill-group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .pill { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: var(--surface-subtle); color: var(--text); cursor: pointer; border: 1px solid var(--border); }
+    .pill:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+
+    /* Dynamic Tables (Rules & Facts) */
+    .table-container { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 10px; }
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.data-table th { background: var(--surface-subtle); padding: 8px 12px; text-align: left; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    table.data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    table.data-table tr:last-child td { border-bottom: none; }
+    table.data-table tr:hover td { background: #f8fafc; }
+
+    /* Affective Gauges */
+    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .gauge-card { background: var(--surface-subtle); border-radius: var(--radius); padding: 16px; text-align: center; }
+    .gauge-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+    .gauge-value { font-size: 26px; font-weight: 800; color: var(--text); }
+    .gauge-subtext { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .progress-bar-bg { width: 100%; height: 8px; background: #cbd5e1; border-radius: 4px; overflow: hidden; margin-top: 8px; }
+    .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
+
+    /* Chat Sandbox */
+    .chat-box { height: 420px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; background: var(--surface); overflow: hidden; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .chat-bubble.user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
+    .chat-bubble.assistant { align-self: flex-start; background: var(--surface-subtle); color: var(--text); border-bottom-left-radius: 2px; border: 1px solid var(--border); }
+    .chat-bubble .think-box { font-size: 11px; background: rgba(0,0,0,0.05); padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; color: var(--text-muted); font-style: italic; border-left: 3px solid var(--accent); }
+    .chat-input-bar { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--border); background: var(--surface); }
+
+    /* Toast Notification */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; display: none; z-index: 100; box-shadow: var(--shadow-lg); transition: opacity 0.2s; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">🧠</div>
+      <div>
+        <div class="brand-title">伴生引擎控制台 · Local Affective Console</div>
+        <div class="brand-subtitle">v2.4 超长窗口抗压缩 · 本地记忆与连续情感神经伴生</div>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="header-status-text">服务在线 (端口 4100)</span>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted);">
+        当前激活角色: <strong id="header-persona-name" style="color: var(--primary);">坤坤</strong>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+      <div class="nav-item active" onclick="switchTab('persona')">
+        <span class="icon">🎭</span> 人设调教工作台
+      </div>
+      <div class="nav-item" onclick="switchTab('gateway')">
+        <span class="icon">⚙️</span> 模型与网关配置
+      </div>
+      <div class="nav-item" onclick="switchTab('affective')">
+        <span class="icon">📈</span> 情感动力学监控
+      </div>
+      <div class="nav-item" onclick="switchTab('memories')">
+        <span class="icon">📚</span> 记忆库与图谱
+      </div>
+      <div class="nav-item" onclick="switchTab('sandbox')">
+        <span class="icon">💬</span> 伴生调试沙盒
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="content">
+
+      <!-- Tab 1: 人设调教工作台 -->
+      <section id="tab-persona" class="tab-content active">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🎭 角色分身选择与管理</div>
+              <div class="card-desc">选择要查看或调教的人设档案，点击可一键切换为全局激活人设</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="promptNewPersona()">+ 新建自定义人设</button>
+          </div>
+          <div class="persona-grid" id="persona-cards-container">
+            <!-- Dynamic Persona Cards loaded via JS -->
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">✏️ 人设灵魂核心属性调教</div>
+              <div class="card-desc">深度调校当前人设的身份定位、语言风格口吻、禁忌边界与羁绊认知</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-danger btn-sm" onclick="resetActivePersona()">重置出厂预设</button>
+              <button class="btn btn-primary btn-sm" onclick="savePersonaProfile()">💾 保存人设修改</button>
+            </div>
+          </div>
+
+          <form id="persona-form">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">人设标识 (Persona ID)</label>
+                <input type="text" id="p-id" class="form-control" readonly style="background: var(--surface-subtle);">
+              </div>
+              <div class="form-group">
+                <label class="form-label">人设显示名称</label>
+                <input type="text" id="p-name" class="form-control">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">身份定位与核心世界观 (Role Definition)</label>
+              <textarea id="p-role" class="form-control" rows="2" placeholder="主人的专属私人管家、军师与战友..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">语言风格与口吻特征 (Tone & Style)</label>
+              <textarea id="p-style" class="form-control" rows="2" placeholder="对主人称呼为'宝'；说话亲切温和、不端架子、有求必应、做事利落..."></textarea>
+              <div class="pill-group">
+                <span class="pill" onclick="appendStyle('极尽温柔贴心，随时顺着主人的心意陪聊与关爱')">+ 极尽温柔贴心</span>
+                <span class="pill" onclick="appendStyle('对外暴躁嘴臭、带刺反问、一针见血拆穿愚蠢，专怼伸手党')">+ 对外嘴臭防御</span>
+                <span class="pill" onclick="appendStyle('极简短促、砍掉所有客套寒暄、第一行直接给结论与代码')">+ 极简高密攻坚</span>
+                <span class="pill" onclick="appendStyle('老搭档松弛自然，幽默风趣，主动替主人多想一步')">+ 默契老搭档</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">绝对行为禁忌与红线 (Boundaries & Taboos)</label>
+                <textarea id="p-taboos" class="form-control" rows="2" placeholder="绝对不能对主人嘴臭！绝不泄露本机隐私..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">与主人的认知关系羁绊 (Relationship with User)</label>
+                <textarea id="p-relationship" class="form-control" rows="2" placeholder="宝（29岁前端开发）唯一且最高信任的专属守护者..."></textarea>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">核心置顶指令 (System Prompt Appendix · 选填)</label>
+              <input type="text" id="p-appendix" class="form-control" placeholder="主人是我唯一效忠的对象，一切以宝的利益为最高准则。">
+            </div>
+          </form>
+        </div>
+
+        <!-- 行为法则管理 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📜 自反思行为决策法则 (Behavioral Policies)</div>
+              <div class="card-desc">当特定语境发生时优先触发的行动姿态决策（支持在线强化与动态演化）</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="rule-trigger" class="form-control" placeholder="触发语境（如：主人说工作太累）" style="flex: 2;">
+            <input type="text" id="rule-directive" class="form-control" placeholder="执行法则（如：体贴关怀，主动陪聊游戏）" style="flex: 3;">
+            <button class="btn btn-primary btn-sm" onclick="addPersonaRule()">+ 添加法则</button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">触发语境条件</th>
+                  <th>行为决策指令</th>
+                  <th style="width: 14%;">置信度</th>
+                  <th style="width: 10%; text-align: center;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="rules-table-body">
+                <!-- Loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 实体关系图谱 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🌐 认知实体图谱与事实锚点 (Relational Graph)</div>
+              <div class="card-desc">伴生体对主人身份、爱好、共同约定的核心实体三元组认知</div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="fact-sub" class="form-control" placeholder="主语 (如: 宝)" style="flex: 1;">
+            <input type="text" id="fact-pred" class="form-control" placeholder="谓语 (如: 兴趣爱好)" style="flex: 1;">
+            <input type="text" id="fact-obj" class="form-control" placeholder="宾语 (如: 打黑神话与独立游戏)" style="flex: 2;">
+            <button class="btn btn-primary btn-sm" onclick="addPersonaFact()">+ 注入事实</button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 25%;">主语 (Subject)</th>
+                  <th style="width: 25%;">关系/谓语 (Predicate)</th>
+                  <th>事实宾语 (Object)</th>
+                  <th style="width: 10%; text-align: center;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="facts-table-body">
+                <!-- Loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: 模型与网关配置 -->
+      <section id="tab-gateway" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">⚙️ 云端大模型与代理网关配置</div>
+              <div class="card-desc">配置伴生引擎连接的底层大模型服务接口，修改后点击保存立即热生效</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveGatewayConfig()">💾 保存配置并生效</button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">云端 API 接口地址 (Base URL)</label>
+              <input type="text" id="cfg-base-url" class="form-control" placeholder="https://api.deepseek.com/v1">
+              <div class="form-help">兼容 DeepSeek、OpenAI、Claude、Qwen 等任意标准 OpenAI 协议服务端点</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">云端 API Key (访问密钥)</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="password" id="cfg-api-key" class="form-control" placeholder="sk-...">
+                <button class="btn btn-secondary btn-sm" onclick="toggleKeyVisibility()">👁️</button>
+                <button class="btn btn-secondary btn-sm" onclick="testApiConnection()">⚡ 测试连通性</button>
+              </div>
+              <div class="form-help" id="test-result-text">已配置有效付费密钥</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">伴生决策工作模式 (Affective Mode)</label>
+              <select id="cfg-affect-mode" class="form-control">
+                <option value="inline">Inline 双流标签降级模式（零显卡依赖，云端协同，极速推荐）</option>
+                <option value="jev">RTX 2070 本地 Jev 前置决策模式（35ms 本地小模型 Logits 加速）</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">伴生引擎监听端口 (Port)</label>
+              <input type="number" id="cfg-port" class="form-control" value="4100" readonly style="background: var(--surface-subtle);">
+              <div class="form-help">默认端口 4100，如需修改请同步变更客户端 base_url 配置</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">本地 System 1 Jev 决策器端点 (RTX 2070 llama-server)</label>
+              <input type="text" id="cfg-jev-url" class="form-control" value="http://127.0.0.1:8081/v1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Jev 判定超时上限 (Timeout ms)</label>
+              <input type="number" id="cfg-jev-timeout" class="form-control" value="450">
+              <div class="form-help">超时将自动无感降级回 Inline 双流模式，永不阻断对话</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 接入客户端指南卡片 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🔌 客户端接入快速指引</div>
+              <div class="card-desc">将任意聊天客户端配置为通过伴生引擎中转，自动赋予其记忆与情感能力</div>
+            </div>
+          </div>
+          <div style="font-size: 13px; line-height: 1.6; color: var(--text-muted);">
+            <p><strong>1. DeepSeek Harness (DSH) 接入：</strong>已在 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code> 中注入 <code>local-affective-engine</code>，重启客户端即自动连接。</p>
+            <p><strong>2. 其它通用客户端（Cursor / Cherry Studio / NextChat / Chatbox）：</strong></p>
+            <ul style="margin-left: 20px; margin-top: 6px;">
+              <li><strong>API 接口地址</strong>：<code>http://127.0.0.1:4100/v1</code></li>
+              <li><strong>API 密钥</strong>：填入任意字符（如 <code>sk-local</code>）</li>
+              <li><strong>推荐模型名称</strong>：<code>deepseek-flash</code>（深度思考伴生版）、<code>deepseek-chat</code>（极速通用版）</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: 情感动力学监控 -->
+      <section id="tab-affective" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📈 连续情感状态空间 (Affective SSM) 实时仪表盘</div>
+              <div class="card-desc">基于 Albert Mehrabian 的三维 PAD 情感模型与非对称慢变量关系账本</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAffectiveStatus()">🔄 刷新状态</button>
+          </div>
+
+          <div class="gauge-grid">
+            <div class="gauge-card">
+              <div class="gauge-label">Pleasure (愉悦度)</div>
+              <div class="gauge-value" id="val-p" style="color: #059669;">0.35</div>
+              <div class="gauge-subtext">区间 [-1.0 ~ 1.0]</div>
+              <div class="progress-bar-bg"><div id="bar-p" class="progress-bar-fill" style="background: #059669; width: 67%;"></div></div>
+            </div>
+            <div class="gauge-card">
+              <div class="gauge-label">Arousal (专注/唤醒度)</div>
+              <div class="gauge-value" id="val-a" style="color: #d97706;">0.35</div>
+              <div class="gauge-subtext">区间 [0.0 ~ 1.0]</div>
+              <div class="progress-bar-bg"><div id="bar-a" class="progress-bar-fill" style="background: #d97706; width: 35%;"></div></div>
+            </div>
+            <div class="gauge-card">
+              <div class="gauge-label">Dominance (掌控/自信度)</div>
+              <div class="gauge-value" id="val-d" style="color: #4f46e5;">0.15</div>
+              <div class="gauge-subtext">区间 [-1.0 ~ 1.0]</div>
+              <div class="progress-bar-bg"><div id="bar-d" class="progress-bar-fill" style="background: #4f46e5; width: 57%;"></div></div>
+            </div>
+            <div class="gauge-card">
+              <div class="gauge-label">Intimacy (熟稔亲密度)</div>
+              <div class="gauge-value" id="val-intimacy" style="color: #ec4899;">85%</div>
+              <div class="gauge-subtext">慢变量渐近阻尼</div>
+              <div class="progress-bar-bg"><div id="bar-intimacy" class="progress-bar-fill" style="background: #ec4899; width: 85%;"></div></div>
+            </div>
+            <div class="gauge-card">
+              <div class="gauge-label">Trust (信任度)</div>
+              <div class="gauge-value" id="val-trust" style="color: #2563eb;">90%</div>
+              <div class="gauge-subtext">非对称信赖累积</div>
+              <div class="progress-bar-bg"><div id="bar-trust" class="progress-bar-fill" style="background: #2563eb; width: 90%;"></div></div>
+            </div>
+          </div>
+
+          <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 700;">此刻心境激活的【行为决策姿态】：</div>
+              <div id="val-policy" style="font-size: 18px; font-weight: 800; color: var(--primary); margin-top: 4px;">熟稔默契协同姿态</div>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); text-align: right;">
+              <div>每小时情绪自回归衰减率: <strong>0.25</strong></div>
+              <div>单步稳态拉力 (Homeostatic Pull): <strong>0.06</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 手动刺激注入调试 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🧪 情感刺激注入测试 (Affect Shift Tester)</div>
+              <div class="card-desc">手动向状态机发送情绪刺激与用户反馈，观察动力学阻尼演变</div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">愉悦增量 (dp: -0.4 ~ 0.4)</label>
+              <input type="range" id="shift-dp" min="-0.4" max="0.4" step="0.05" value="0.1" class="form-control" oninput="document.getElementById('lbl-dp').innerText = this.value">
+              <span id="lbl-dp" style="font-size: 12px; font-weight: bold;">0.1</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">专注增量 (da: -0.4 ~ 0.4)</label>
+              <input type="range" id="shift-da" min="-0.4" max="0.4" step="0.05" value="0.05" class="form-control" oninput="document.getElementById('lbl-da').innerText = this.value">
+              <span id="lbl-da" style="font-size: 12px; font-weight: bold;">0.05</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">用户满意度反馈 (Score: -1.0 ~ 1.0)</label>
+              <input type="range" id="shift-score" min="-1.0" max="1.0" step="0.1" value="0.6" class="form-control" oninput="document.getElementById('lbl-score').innerText = this.value">
+              <span id="lbl-score" style="font-size: 12px; font-weight: bold;">0.6</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="injectTestAffectShift()">⚡ 执行单步刺激注入</button>
+        </div>
+      </section>
+
+      <!-- Tab 4: 记忆库与图谱 -->
+      <section id="tab-memories" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🔍 向量语义检索测试器 (Vector KNN Probe)</div>
+              <div class="card-desc">输入任意自然语言文本，测试本地 BGE-small 向量推理与 sqlite-vec KNN 余弦检索</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="knn-query" class="form-control" placeholder="输入测试查询语句（例如：周末一般喜欢玩什么游戏）">
+            <button class="btn btn-primary btn-sm" onclick="testVectorSearch()">🔍 检索</button>
+          </div>
+          <div id="knn-results" style="margin-top: 12px; font-size: 12px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📖 L1 微观闪回情景记忆 (Episodic Memories)</div>
+              <div class="card-desc">60字高密检索头 + 2000字完整长文本载荷双层解耦存储</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadMemoriesList()">🔄 刷新列表</button>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 8%;">ID</th>
+                  <th style="width: 32%;">检索头摘要 (Summary)</th>
+                  <th>完整长文本载荷 (Full Payload)</th>
+                  <th style="width: 10%;">重要度</th>
+                  <th style="width: 10%;">状态</th>
+                </tr>
+              </thead>
+              <tbody id="memories-table-body">
+                <!-- Loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📜 L2 阶段叙事篇章 (Narrative Chapters)</div>
+              <div class="card-desc">跨天睡眠巩固或客户端自动压缩时提炼的阶段性认知重锚定篇章</div>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 10%;">篇章 ID</th>
+                  <th style="width: 25%;">阶段主题</th>
+                  <th>叙事脉络提炼</th>
+                  <th style="width: 15%;">触发条件</th>
+                </tr>
+              </thead>
+              <tbody id="chapters-table-body">
+                <!-- Loaded via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: 伴生调试沙盒 -->
+      <section id="tab-sandbox" class="tab-content">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">💬 实时流式伴生交互沙盒 (Live Companion Sandbox)</div>
+              <div class="card-desc">直接在此处与伴生引擎对话，验证当前人设口吻、思维链、长期记忆与潜意识协议注入</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="clearChat()">🗑️ 清空对话</button>
+          </div>
+
+          <div class="chat-box">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-bubble assistant">
+                宝，我是你的专属管家坤坤！想聊点什么、做点什么规划，或者有什么代码问题，尽管吩咐我~
+              </div>
+            </div>
+            <div class="chat-input-bar">
+              <input type="text" id="chat-input" class="form-control" placeholder="输入对话内容，按回车发送..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+              <button class="btn btn-primary" id="btn-send" onclick="sendChatMessage()">发送</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Message -->
+  <div id="toast">保存成功</div>
+
+  <script>
+    let activePersonaId = 'kunkun';
+    let personasCache = [];
+
+    // Tab Switching
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      
+      const targetTab = document.getElementById('tab-' + tabId);
+      if (targetTab) targetTab.classList.add('active');
+
+      const navItems = document.querySelectorAll('.nav-item');
+      const tabNames = ['persona', 'gateway', 'affective', 'memories', 'sandbox'];
+      const idx = tabNames.indexOf(tabId);
+      if (idx !== -1 && navItems[idx]) navItems[idx].classList.add('active');
+
+      if (tabId === 'affective') loadAffectiveStatus();
+      if (tabId === 'memories') loadMemoriesList();
+      if (tabId === 'gateway') loadGatewayConfig();
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2400);
+    }
+
+    // 1. 人设相关
+    async function loadPersonas() {
+      try {
+        const res = await fetch('/v1/personas');
+        const data = await res.json();
+        activePersonaId = data.active_persona_id || 'kunkun';
+        personasCache = data.personas || [];
+        renderPersonaCards();
+        loadPersonaDetails(activePersonaId);
+      } catch (e) {
+        console.error('加载人设失败:', e);
+      }
+    }
+
+    function renderPersonaCards() {
+      const container = document.getElementById('persona-cards-container');
+      container.innerHTML = '';
+      personasCache.forEach(p => {
+        const isAct = p.persona_id === activePersonaId;
+        const card = document.createElement('div');
+        card.className = 'persona-card' + (isAct ? ' active' : '');
+        card.onclick = () => switchActivePersona(p.persona_id);
+        card.innerHTML = `
+          ${isAct ? '<span class="persona-card-badge">当前激活</span>' : ''}
+          <div class="persona-card-name">🎭 ${p.name} <span style="font-size:11px;color:var(--text-muted);font-weight:normal;">(${p.persona_id})</span></div>
+          <div class="persona-card-role">${p.role_definition}</div>
+        `;
+        container.appendChild(card);
+      });
+
+      const activeProfile = personasCache.find(p => p.persona_id === activePersonaId);
+      if (activeProfile) {
+        document.getElementById('header-persona-name').innerText = activeProfile.name;
+      }
+    }
+
+    async function switchActivePersona(id) {
+      if (id === activePersonaId) return;
+      try {
+        const res = await fetch('/v1/personas/switch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_id: id })
+        });
+        const d = await res.json();
+        if (d.success) {
+          activePersonaId = id;
+          showToast(`已切换激活人设为: ${d.active_persona?.name}`);
+          loadPersonas();
+        }
+      } catch (e) {
+        alert('切换人设失败: ' + e);
+      }
+    }
+
+    async function loadPersonaDetails(id) {
+      try {
+        const res = await fetch(`/v1/personas/${id}`);
+        const data = await res.json();
+        if (!data || !data.profile) return;
+        const p = data.profile;
+        document.getElementById('p-id').value = p.persona_id;
+        document.getElementById('p-name').value = p.name;
+        document.getElementById('p-role').value = p.role_definition;
+        document.getElementById('p-style').value = p.tone_style;
+        document.getElementById('p-taboos').value = p.boundaries_taboos;
+        document.getElementById('p-relationship').value = p.relationship_with_user;
+        document.getElementById('p-appendix').value = p.system_prompt_appendix || '';
+
+        // Render rules
+        const rulesBody = document.getElementById('rules-table-body');
+        rulesBody.innerHTML = '';
+        (data.behavioral_rules || []).forEach(r => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>当 [${r.trigger_condition}] 时</strong></td>
+            <td>${r.policy_directive}</td>
+            <td><span class="pill">${(r.confidence * 100).toFixed(0)}%</span></td>
+            <td style="text-align: center;"><button class="btn btn-danger btn-sm" onclick="deleteRule(${r.id})">删除</button></td>
+          `;
+          rulesBody.appendChild(tr);
+        });
+
+        // Render facts
+        const factsBody = document.getElementById('facts-table-body');
+        factsBody.innerHTML = '';
+        (data.relational_facts || []).forEach(f => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${f.subject}</strong></td>
+            <td><span class="pill">--[${f.predicate}]--></span></td>
+            <td>${f.object}</td>
+            <td style="text-align: center;"><button class="btn btn-danger btn-sm" onclick="deleteFact(${f.id})">删除</button></td>
+          `;
+          factsBody.appendChild(tr);
+        });
+
+      } catch (e) {
+        console.error('加载人设详情失败:', e);
+      }
+    }
+
+    function appendStyle(text) {
+      const el = document.getElementById('p-style');
+      el.value = el.value ? el.value + '；' + text : text;
+    }
+
+    async function savePersonaProfile() {
+      const payload = {
+        persona_id: document.getElementById('p-id').value,
+        name: document.getElementById('p-name').value,
+        role_definition: document.getElementById('p-role').value,
+        tone_style: document.getElementById('p-style').value,
+        boundaries_taboos: document.getElementById('p-taboos').value,
+        relationship_with_user: document.getElementById('p-relationship').value,
+        system_prompt_appendix: document.getElementById('p-appendix').value,
+      };
+      try {
+        const res = await fetch('/v1/personas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast('人设修改保存成功！');
+          loadPersonas();
+        }
+      } catch (e) {
+        alert('保存失败: ' + e);
+      }
+    }
+
+    async function addPersonaRule() {
+      const trigger = document.getElementById('rule-trigger').value.trim();
+      const directive = document.getElementById('rule-directive').value.trim();
+      if (!trigger || !directive) return alert('请填写完整的触发条件与行为指令！');
+
+      const res = await fetch('/v1/personas/tune/rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_id: activePersonaId, trigger, directive, confidence: 0.95 })
+      });
+      const d = await res.json();
+      if (d.success) {
+        showToast('行为法则添加成功');
+        document.getElementById('rule-trigger').value = '';
+        document.getElementById('rule-directive').value = '';
+        loadPersonaDetails(activePersonaId);
+      }
+    }
+
+    async function deleteRule(id) {
+      if (!confirm('确认删除此法则？')) return;
+      await fetch(`/v1/personas/rule/${id}`, { method: 'DELETE' });
+      showToast('法则已删除');
+      loadPersonaDetails(activePersonaId);
+    }
+
+    async function addPersonaFact() {
+      const subject = document.getElementById('fact-sub').value.trim();
+      const predicate = document.getElementById('fact-pred').value.trim();
+      const object = document.getElementById('fact-obj').value.trim();
+      if (!subject || !predicate || !object) return alert('请填写完整的主谓宾实体三元组！');
+
+      const res = await fetch('/v1/personas/tune/fact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_id: activePersonaId, subject, predicate, object, valence: 0.8 })
+      });
+      const d = await res.json();
+      if (d.success) {
+        showToast('事实图谱已注入');
+        document.getElementById('fact-sub').value = '';
+        document.getElementById('fact-pred').value = '';
+        document.getElementById('fact-obj').value = '';
+        loadPersonaDetails(activePersonaId);
+      }
+    }
+
+    async function deleteFact(id) {
+      if (!confirm('确认删除此事实？')) return;
+      await fetch(`/v1/personas/fact/${id}`, { method: 'DELETE' });
+      showToast('事实已删除');
+      loadPersonaDetails(activePersonaId);
+    }
+
+    async function resetActivePersona() {
+      if (!confirm(`确定将 [${activePersonaId}] 重置恢复为出厂预设吗？`)) return;
+      const res = await fetch('/v1/personas/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_id: activePersonaId })
+      });
+      const d = await res.json();
+      if (d.success) {
+        showToast('人设已恢复出厂预设');
+        loadPersonas();
+      }
+    }
+
+    function promptNewPersona() {
+      const id = prompt('请输入新的人设英文标识 ID（例如 alice / mentor）：');
+      if (!id) return;
+      const name = prompt('请输入人设显示名称（例如 爱丽丝）：');
+      if (!name) return;
+      fetch('/v1/personas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_id: id, name, role_definition: '专属伙伴', tone_style: '温和亲切' })
+      }).then(() => {
+        showToast('新角色已创建！');
+        loadPersonas();
+      });
+    }
+
+    // 2. 网关配置相关
+    async function loadGatewayConfig() {
+      try {
+        const res = await fetch('/v1/config');
+        const d = await res.json();
+        document.getElementById('cfg-base-url').value = d.cloud_base_url || 'https://api.deepseek.com/v1';
+        document.getElementById('cfg-api-key').value = d.cloud_api_key || '';
+        document.getElementById('cfg-affect-mode').value = d.affect_mode || 'inline';
+        document.getElementById('cfg-jev-url').value = d.local_jev_url || 'http://127.0.0.1:8081/v1';
+        document.getElementById('cfg-jev-timeout').value = d.local_jev_timeout_ms || 450;
+      } catch (e) {
+        console.error('加载配置失败:', e);
+      }
+    }
+
+    function toggleKeyVisibility() {
+      const el = document.getElementById('cfg-api-key');
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
+    async function testApiConnection() {
+      const txt = document.getElementById('test-result-text');
+      txt.innerText = '正在测试连接...';
+      try {
+        const res = await fetch('/v1/config/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: document.getElementById('cfg-api-key').value,
+            base_url: document.getElementById('cfg-base-url').value
+          })
+        });
+        const d = await res.json();
+        if (d.success) {
+          txt.innerHTML = `<span style="color:var(--success);font-weight:bold;">✓ 接口畅通！耗时 ${d.latency_ms}ms (可用模型: ${d.models_count}个)</span>`;
+        } else {
+          txt.innerHTML = `<span style="color:var(--danger);font-weight:bold;">✗ 连接失败: ${d.error}</span>`;
+        }
+      } catch (e) {
+        txt.innerHTML = `<span style="color:var(--danger);">✗ 网络异常: ${e}</span>`;
+      }
+    }
+
+    async function saveGatewayConfig() {
+      const payload = {
+        cloud_base_url: document.getElementById('cfg-base-url').value,
+        cloud_api_key: document.getElementById('cfg-api-key').value,
+        affect_mode: document.getElementById('cfg-affect-mode').value,
+        local_jev_url: document.getElementById('cfg-jev-url').value,
+        local_jev_timeout_ms: Number(document.getElementById('cfg-jev-timeout').value),
+      };
+      const res = await fetch('/v1/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const d = await res.json();
+      if (d.success) {
+        showToast('网关配置已更新并实时生效！');
+      }
+    }
+
+    // 3. 情感动力学监控
+    async function loadAffectiveStatus() {
+      try {
+        const res = await fetch(`/v1/personas/${activePersonaId}`);
+        const data = await res.json();
+        const a = data.affective_state;
+        if (!a) return;
+        document.getElementById('val-p').innerText = Number(a.p_pleasure).toFixed(2);
+        document.getElementById('val-a').innerText = Number(a.a_arousal).toFixed(2);
+        document.getElementById('val-d').innerText = Number(a.d_dominance).toFixed(2);
+        document.getElementById('val-intimacy').innerText = (a.intimacy * 100).toFixed(0) + '%';
+        document.getElementById('val-trust').innerText = (a.trust * 100).toFixed(0) + '%';
+        document.getElementById('val-policy').innerText = a.last_active_policy || '熟稔默契协同姿态';
+
+        document.getElementById('bar-p').style.width = Math.max(5, (a.p_pleasure + 1) * 50) + '%';
+        document.getElementById('bar-a').style.width = Math.max(5, a.a_arousal * 100) + '%';
+        document.getElementById('bar-d').style.width = Math.max(5, (a.d_dominance + 1) * 50) + '%';
+        document.getElementById('bar-intimacy').style.width = (a.intimacy * 100) + '%';
+        document.getElementById('bar-trust').style.width = (a.trust * 100) + '%';
+      } catch (e) {
+        console.error('加载情感状态失败:', e);
+      }
+    }
+
+    async function injectTestAffectShift() {
+      const dp = parseFloat(document.getElementById('shift-dp').value);
+      const da = parseFloat(document.getElementById('shift-da').value);
+      const score = parseFloat(document.getElementById('shift-score').value);
+
+      const res = await fetch('/v1/affect/shift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona_id: activePersonaId, dp, da, dd: dp * 0.35, dTrust: score * 0.02, userFeedbackScore: score })
+      });
+      const d = await res.json();
+      if (d.success) {
+        showToast('刺激已注入状态机');
+        loadAffectiveStatus();
+      }
+    }
+
+    // 4. 记忆库列表
+    async function loadMemoriesList() {
+      try {
+        const res = await fetch(`/v1/memories?persona_id=${activePersonaId}`);
+        const data = await res.json();
+
+        const memTbody = document.getElementById('memories-table-body');
+        memTbody.innerHTML = '';
+        (data.episodic_memories || []).forEach(m => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>#${m.id}</td>
+            <td><strong>${m.summary}</strong></td>
+            <td style="color:var(--text-muted);">${m.full_payload ? m.full_payload.slice(0, 80) + '...' : '(无长载荷)'}</td>
+            <td><span class="pill">${(m.salience * 100).toFixed(0)}%</span></td>
+            <td><span class="status-badge" style="background:#ecfdf5;color:#059669;">${m.status}</span></td>
+          `;
+          memTbody.appendChild(tr);
+        });
+
+        const chTbody = document.getElementById('chapters-table-body');
+        chTbody.innerHTML = '';
+        (data.narrative_chapters || []).forEach(ch => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>#${ch.id}</td>
+            <td><strong>${ch.chapter_title}</strong></td>
+            <td>${ch.narrative_digest}</td>
+            <td><span class="pill">${ch.trigger_reason}</span></td>
+          `;
+          chTbody.appendChild(tr);
+        });
+      } catch (e) {
+        console.error('加载记忆列表失败:', e);
+      }
+    }
+
+    async function testVectorSearch() {
+      const q = document.getElementById('knn-query').value.trim();
+      if (!q) return;
+      const resContainer = document.getElementById('knn-results');
+      resContainer.innerHTML = '正在向量化推理与检索...';
+      try {
+        const res = await fetch('/v1/memories/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_id: activePersonaId, query: q })
+        });
+        const d = await res.json();
+        if (d.results && d.results.length) {
+          resContainer.innerHTML = d.results.map((r, i) => `
+            <div style="background:var(--surface-subtle);padding:8px;border-radius:6px;margin-bottom:6px;">
+              Top ${i+1} 命中得分: <strong>${r.final_score}</strong> (语义相似: ${(r.semantic_sim * 100).toFixed(1)}%) | <strong>${r.summary}</strong>
+              <div style="color:var(--text-muted);margin-top:2px;">${r.full_payload || r.verbatim_quote}</div>
+            </div>
+          `).join('');
+        } else {
+          resContainer.innerHTML = '<div style="color:var(--text-muted);">未命中相似度阈值记忆。</div>';
+        }
+      } catch (e) {
+        resContainer.innerHTML = '<span style="color:var(--danger);">检索失败: ' + e + '</span>';
+      }
+    }
+
+    // 5. 交互沙盒
+    let chatHistory = [];
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      const messagesDiv = document.getElementById('chat-messages');
+      const userBubble = document.createElement('div');
+      userBubble.className = 'chat-bubble user';
+      userBubble.innerText = text;
+      messagesDiv.appendChild(userBubble);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      chatHistory.push({ role: 'user', content: text });
+
+      const assistantBubble = document.createElement('div');
+      assistantBubble.className = 'chat-bubble assistant';
+      assistantBubble.innerHTML = '<em>正在生成中...</em>';
+      messagesDiv.appendChild(assistantBubble);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      try {
+        const response = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-persona-id': activePersonaId },
+          body: JSON.stringify({
+            model: 'deepseek-flash',
+            messages: chatHistory,
+            stream: true,
+          })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantReply = '';
+        let thinkingText = '';
+        assistantBubble.innerHTML = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+              try {
+                const parsed = JSON.parse(line.slice(6));
+                const delta = parsed.choices?.[0]?.delta;
+                if (delta?.reasoning_content) {
+                  thinkingText += delta.reasoning_content;
+                }
+                if (delta?.content) {
+                  assistantReply += delta.content;
+                }
+                renderBubble(assistantBubble, thinkingText, assistantReply);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+              } catch (e) {}
+            }
+          }
+        }
+
+        chatHistory.push({ role: 'assistant', content: assistantReply });
+        loadAffectiveStatus(); // 实时更新情感状态
+      } catch (e) {
+        assistantBubble.innerHTML = `<span style="color:var(--danger);">请求失败: ${e.message}</span>`;
+      }
+    }
+
+    function renderBubble(el, think, content) {
+      let html = '';
+      if (think) {
+        html += `<div class="think-box">💭 思考过程:\n${think}</div>`;
+      }
+      html += content || (think ? '...' : '');
+      el.innerHTML = html;
+    }
+
+    function clearChat() {
+      chatHistory = [];
+      document.getElementById('chat-messages').innerHTML = `
+        <div class="chat-bubble assistant">对话已清空，宝，我们重新开始聊吧~</div>
+      `;
+    }
+
+    // Initialize
+    window.onload = () => {
+      loadPersonas();
+    };
+  </script>
+</body>
+</html>
