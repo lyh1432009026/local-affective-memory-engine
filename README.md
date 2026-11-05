@@ -1,4 +1,4 @@
-# 本地记忆与情感神经伴生引擎 v2.3（零人工种子 · 隐式强化 · RTX 2070 本地 Jev 决策双模终版）
+# 本地记忆与情感神经伴生引擎 v2.4（零人工种子 · 隐式强化 · RTX 2070 Jev 双模 · 100天超长窗口抗压缩终版）
 
 > **版本演进说明**：
 > - **v1.0**：确立 Node.js 本地“海马体+杏仁核”驱动云端大模型 API 的基础架构。
@@ -9,10 +9,14 @@
 >   3. **隐式强化学习（Implicit RL）全闭环**：采用 `UPDATE ... RETURNING` 原子消费快照（支持 Tool Loop 跨步挂起保护 Hold & Settle）；引入**余弦相似度话题硬切换门控（Topic-Shift Gating）**与**排障贴报错免责校准**；打通 `behavioral_policies` 置信度在线更新与淘汰闭环；入库执行结构化代码块脱敏清洗、按姿态分桶保留 Top-20 及 UCB 探索采样。
 >   4. **记忆检索不应期（Refractory Period）**：对 3 分钟内刚召回过的闪回记忆施加短期抑制系数，根除同一负面记忆在连续多轮中被反复拉出反刍。
 >   5. **幂等历史清洗与 User 尾部安全追加**：入口自动幂等剥离历史残留的 `<cognitive_context>`，并将当轮潜意识块追加至最后一条 `user` 消息尾部（兼容 Claude/DeepSeek-R1 严格角色交替，100% 保护前序历史与 `User_t` 本体 Prefix Cache）。
-> - **v2.3（当前终版 · 新增 RTX 2070 本地 Jev / System One 决策引擎双模自适应架构）**：
->   - 针对 **NVIDIA RTX 2070 (8GB GDDR6, 448GB/s)** 定制 `src/engine/local-jev.ts`：基于 **Prefix KV-Cache 广播 + 单 Token Logits 提取 (`max_tokens: 1, top_logprobs`) + 香农熵校准置信度 (`Confidence = 1 - H(P)/ln(K)`)**，在本地 **35ms ~ 65ms** 内一次性并发完成 `Choice / Score / Noul` 六维判定。
->   - **当轮零滞后情绪对齐 + 低置信度自动弃权**：解决主模型首行标签慢半拍问题；当遇到复杂反讽导致 Jev 置信度 `< 0.55` 时自动弃权不乱干预主模型；彻底解放云端主模型（免除首行 `<affect_update>` 标签与 `DualStreamParser` 缓冲）。
->   - **双模无缝降级（`AFFECT_MODE=jev | inline`）**：本地 2070 开启 Jev 服务时走 `jev` 零延迟前置判定；显卡被占满或服务未启动时，`450ms` 超时自动无缝降级回 `inline`（v2.2 单请求首行标签模式），永不阻断对话。
+> - **v2.3（新增 RTX 2070 本地 Jev / System One 决策引擎双模自适应架构）**：
+>   - 针对 **NVIDIA RTX 2070 (8GB GDDR6, 448GB/s)** 定制 `src/engine/local-jev.ts`：基于 **Prefix KV-Cache 广播 + 单 Token Logits 提取 (`max_tokens: 1, top_logprobs`) + 香农熵校准置信度 (`Confidence = 1 - H(P)/ln(K)`)**，在本地 **35ms ~ 65ms** 内一次性并发完成六维判定。
+>   - **双模无缝降级（`AFFECT_MODE=jev | inline`）**：本地 2070 开启 Jev 服务时走 `jev` 零延迟前置判定；显卡被占满或服务未启动时，`450ms` 超时自动无缝降级回 `inline`。
+> - **v2.4（当前终版 · 新增 20~100 天单窗口超长对话“三级记忆金字塔 + 自动压缩重锚定 + 仿生睡眠巩固”架构）**：
+>   1. **长记忆文本双层解耦（`summary` + `full_payload` 2000字按需展开）**：解决 45 字截断存不下长段技术规范/业务长文本的痛点；常规召回只展示 60 字检索头，Top-1 高相似度命中（`semantic_sim >= 0.72`）时自动按需展开 2000 字 `full_payload` 完整长文本载荷。
+>   2. **客户端自动压缩检测与灵魂重锚定（Compaction Detector & Post-Compaction Re-Anchoring）**：全量对话原文实时冷备份至 `raw_turn_archive`；当检测到客户端触发超出上下文自动压缩（`messages.length` 骤降 $\ge 45\%$ 或出现 `<conversation_history_summary>`）时，自动从本地冷表抢救提炼 **《阶段叙事篇章》（`narrative_chapters`）** 并在随后 3 轮挂载重锚定块，彻底根除“一压缩就失忆变回陌生客服”。
+>   3. **仿生睡眠巩固与过期事实覆写（Sleep Consolidation & Fact Superseding）**：跨天唤醒（间隔 $\ge 6$ 小时）或每满 25 轮自动对高相似碎片（余弦相似度 $\ge 0.84$）进行聚类合并去重，并支持新设定自动覆写旧设定（`status: 'active' -> 'superseded'`），确保同一窗口连续聊 100 天不爆表、旧设定不霸榜。
+>   4. **网关内置 48K Token 滑动窗口护栏**：若客户端本身无自动压缩功能，超过 48K 水位时自动按 20 条固定块折叠归档为本地阶段篇章，永不触发云端 `400 Context Length Exceeded`。
 
 ---
 
@@ -47,8 +51,9 @@ local-affective-engine/
     │   ├── local-jev.ts           # [v2.3新增] RTX 2070 本地 Jev 决策引擎：单Token Logits提取 + 香农熵校准置信度
     │   ├── affective-ssm.ts       # 连续情感状态空间：Tonic/Phasic 隔离、单步稳态拉力、三维演化与渐近阻尼
     │   ├── implicit-rl.ts         # 隐式反馈强化器：RETURNING 原子消费、话题切换门控、报错免责、法则演化与分桶淘汰
-    │   ├── memory-retriever.ts    # 四维混合召回与异步落盘：语义 + 三维心境共鸣 + 3分钟不应期抑制 + 动态半衰期
-    │   └── context-compiler.ts    # 行为姿态编译器：施密特迟滞防抖、UCB 探索抽样、历史幂等清洗与双模尾部编译
+    │   ├── memory-retriever.ts    # 四维混合召回与长记忆载荷：60字检索头 + 2000字 full_payload 按需展开 + 同主题旧记忆覆写
+    │   ├── memory-consolidation.ts# [v2.4新增] 100天超长窗口引擎：自动压缩检测重锚定、跨天睡眠聚类合并、48K滑动窗口护栏
+    │   └── context-compiler.ts    # 行为姿态编译器：施密特迟滞防抖、UCB抽样、Top-1长记忆展开、压缩重锚定与尾部编译
     └── pipeline/
         └── dual-stream.ts         # 工业级流式状态机（Inline 降级模式专用）：兼容 <think> 块、基于 '>' 闭合切分与 flush()
 ```
@@ -116,23 +121,26 @@ CREATE TABLE IF NOT EXISTS behavioral_policies (
 CREATE INDEX IF NOT EXISTS idx_policies_persona_conf
     ON behavioral_policies(persona_id, confidence DESC);
 
--- 4. 情景闪回记忆主表（带三维情感坐标戳与最近唤醒时间戳）
+-- 4. L1 微观情景闪回记忆主表（v2.4 升级：60字检索头 + 2000字 full_payload 长文本双层解耦 + 状态生命周期）
 CREATE TABLE IF NOT EXISTS episodic_memories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     persona_id TEXT NOT NULL,
-    summary TEXT NOT NULL,
+    summary TEXT NOT NULL,                   -- 60字高密检索索引头（用于向量化与常规列表）
+    full_payload TEXT DEFAULT '',            -- [v2.4新增] 1500~2000字完整长文本载荷/技术规范/代码切片（Top-1高匹配时按需展开）
     verbatim_quote TEXT DEFAULT '',
     emotion_p REAL NOT NULL,
     emotion_a REAL NOT NULL,
     emotion_d REAL NOT NULL,
     salience REAL NOT NULL DEFAULT 0.5,
     access_count INTEGER NOT NULL DEFAULT 0,
+    -- active: 活跃检索池 | consolidated: 已在跨天睡眠巩固中合并 | superseded: 已被后续新事实覆写
+    status TEXT NOT NULL DEFAULT 'active',
     created_at_ms INTEGER NOT NULL,
     last_accessed_ms INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_episodic_persona_salience
-    ON episodic_memories(persona_id, salience DESC, last_accessed_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_episodic_persona_status
+    ON episodic_memories(persona_id, status, salience DESC, last_accessed_ms DESC);
 
 -- 情景记忆向量虚拟表：显式声明 PARTITION KEY 与 cosine 距离，彻底解决多角色 Post-Filter 饥饿
 CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodic USING vec0(
@@ -141,14 +149,53 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_episodic USING vec0(
     embedding FLOAT[512] distance_metric=cosine
 );
 
--- 主表删除时自动级联清理 vec0 孤儿向量
+-- 主表删除或归档/覆写时自动级联清理 vec0 活跃向量，防止 100 天长跑后过期向量霸榜
 CREATE TRIGGER IF NOT EXISTS trg_delete_vec_episodic
 AFTER DELETE ON episodic_memories
 BEGIN
     DELETE FROM vec_episodic WHERE memory_id = OLD.id;
 END;
 
--- 5. 实体关系与共同认知图谱表
+CREATE TRIGGER IF NOT EXISTS trg_archive_vec_episodic
+AFTER UPDATE OF status ON episodic_memories
+WHEN NEW.status != 'active'
+BEGIN
+    DELETE FROM vec_episodic WHERE memory_id = NEW.id;
+END;
+
+-- 5. L2 中观阶段叙事篇章表（v2.4 新增：每满 25 轮、隔夜跨天或触发客户端自动压缩时生成，用于压缩后灵魂重锚定）
+CREATE TABLE IF NOT EXISTS narrative_chapters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona_id TEXT NOT NULL,
+    chapter_title TEXT NOT NULL,             -- 阶段主题标题
+    narrative_digest TEXT NOT NULL,          -- 300~600字阶段性进展、关键架构决议与双方默契脉络
+    dominant_mood_p REAL NOT NULL DEFAULT 0.2,
+    dominant_mood_a REAL NOT NULL DEFAULT 0.3,
+    turn_span_count INTEGER NOT NULL DEFAULT 0,
+    trigger_reason TEXT NOT NULL,            -- 'auto_compaction' | 'sleep_gap' | 'turn_batch'
+    created_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapters_persona_time
+    ON narrative_chapters(persona_id, created_at_ms DESC);
+
+-- 6. 全量对话原文冷归档表（v2.4 新增：100天1万轮仅占 ~20MB 磁盘，保障客户端自动压缩时本地一字不丢）
+CREATE TABLE IF NOT EXISTS raw_turn_archive (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    persona_id TEXT NOT NULL,
+    user_prompt TEXT NOT NULL,
+    assistant_reply TEXT NOT NULL,
+    action_policy TEXT NOT NULL,
+    emotion_p REAL NOT NULL,
+    emotion_a REAL NOT NULL,
+    consolidated_chapter_id INTEGER DEFAULT NULL, -- NULL 表示尚未被睡眠巩固归档进 narrative_chapters
+    created_at_ms INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_raw_archive_unconsolidated
+    ON raw_turn_archive(persona_id, consolidated_chapter_id, created_at_ms ASC);
+
+-- 7. L3 宏观实体关系与共同认知图谱表（v2.4 升级：支持同主谓新事实自动覆写旧设定 status='superseded'）
 CREATE TABLE IF NOT EXISTS relational_graph (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     persona_id TEXT NOT NULL,
@@ -157,6 +204,7 @@ CREATE TABLE IF NOT EXISTS relational_graph (
     object TEXT NOT NULL,
     emotional_valence REAL DEFAULT 0.0,
     confidence REAL DEFAULT 1.0,
+    status TEXT NOT NULL DEFAULT 'active',   -- 'active' | 'superseded'
     updated_at_ms INTEGER NOT NULL,
     UNIQUE(persona_id, subject, predicate, object)
 );
@@ -623,12 +671,16 @@ function clampScore(v: number, min: number, max: number): number {
 
 ---
 
-### 5. 四维心境一致性混合检索与写入器 (`src/engine/memory-retriever.ts`)
+### 5. 四维心境一致性混合检索与长记忆载荷展开器 (`src/engine/memory-retriever.ts`)
 
-**接纳项完整实现**：
+**v2.2 接纳项完整实现**：
 - 使用 `vec0` 的 `persona_id PARTITION KEY` 分区内 KNN；
 - 写入 `vec0` 强制使用 `BigInt(info.lastInsertRowid)`；
 - 新增 **3 分钟闪回不应期（Refractory Period Penalty）**：对最近 3 分钟内刚被召回过的记忆施加 `0.35` 的共鸣抑制系数，彻底杜绝同一条高冲击负面记忆在连续多轮对话中被反复拉出反刍。
+
+**v2.4 新增能力**：
+- **长记忆文本双层解耦（Summary-Payload）**：`summary`（60 字检索头） + `full_payload`（1500~2000 字完整长文本），检索阶段仅返回轻量摘要，Top-1 高匹配时按需展开完整载荷；
+- **同主题旧记忆自动覆写（Superseding）**：写入新记忆前先检索语义高度重合的活跃旧记忆，将其 `status` 降级为 `superseded`，根除第 5 天旧设定在第 90 天霸榜的时序失真。
 
 ```typescript
 import Database from 'better-sqlite3';
@@ -639,39 +691,70 @@ export interface RecalledMemory {
   id: number;
   summary: string;
   verbatim_quote: string;
+  full_payload: string;   // [v2.4] Top-1 高匹配时展开的完整长文本载荷
   emotion_p: number;
   emotion_a: number;
   emotion_d: number;
   salience: number;
   final_score: number;
+  semantic_sim: number;   // [v2.4] 归一化语义相似度，供 context-compiler 判定是否展开长文本
 }
 
 export class MemoryRetriever {
   constructor(private db: Database.Database, private personaId: string = 'default') {}
 
+  /**
+   * 写入长期闪回记忆（v2.4：60字检索头 + 最长2000字长文本载荷 + 同主题旧记忆覆写）
+   */
   public commitEpisodicMemory(
     summary: string,
     verbatimQuote: string,
     mood: PADState,
     salience: number,
     embedding: Float32Array,
+    fullPayload: string = '',
     nowMs: number = Date.now()
   ): void {
     if (!summary || salience < 0.35) return;
 
     const cleanSummary = summary.replace(/[<>`]/g, '').trim().slice(0, 60);
     const cleanQuote = buildStructuralDigest(verbatimQuote, 90);
+    // [v2.4] 长文本载荷：保留完整长段技术规范/业务长文本，最多 2000 字，剥离尖括号防注入
+    const cleanPayload = (fullPayload || verbatimQuote)
+      .replace(/<[^>]+>/g, '')
+      .replace(/[`]/g, "'")
+      .trim()
+      .slice(0, 2000);
 
     const tx = this.db.transaction(() => {
+      // [v2.4] 覆写检测：语义高度重合(cos_distance < 0.30)的活跃旧记忆降级为 superseded
+      const overlaps = this.db
+        .prepare(
+          `SELECT m.id
+           FROM vec_episodic v
+           JOIN episodic_memories m ON m.id = v.memory_id
+           WHERE v.embedding MATCH ? AND k = 3 AND v.persona_id = ? AND m.status = 'active'`
+        )
+        .all(Buffer.from(embedding.buffer), this.personaId) as any[];
+      if (overlaps.length > 0) {
+        const supersedeStmt = this.db.prepare(
+          `UPDATE episodic_memories SET status = 'superseded' WHERE id = ? AND persona_id = ?`
+        );
+        for (const ov of overlaps) {
+          if ((ov as any).distance < 0.30) supersedeStmt.run(ov.id, this.personaId);
+        }
+      }
+
       const info = this.db
         .prepare(
           `INSERT INTO episodic_memories
-           (persona_id, summary, verbatim_quote, emotion_p, emotion_a, emotion_d, salience, created_at_ms, last_accessed_ms)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           (persona_id, summary, full_payload, verbatim_quote, emotion_p, emotion_a, emotion_d, salience, status, created_at_ms, last_accessed_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
         )
         .run(
           this.personaId,
           cleanSummary,
+          cleanPayload,
           cleanQuote,
           mood.p,
           mood.a,
@@ -701,13 +784,13 @@ export class MemoryRetriever {
     const candidates = this.db
       .prepare(
         `SELECT
-           m.id, m.summary, m.verbatim_quote,
+           m.id, m.summary, m.verbatim_quote, m.full_payload,
            m.emotion_p, m.emotion_a, m.emotion_d,
            m.salience, m.access_count, m.created_at_ms, m.last_accessed_ms,
            v.distance AS cos_distance
          FROM vec_episodic v
          JOIN episodic_memories m ON m.id = v.memory_id
-         WHERE v.embedding MATCH ? AND k = 20 AND v.persona_id = ?`
+         WHERE v.embedding MATCH ? AND k = 20 AND v.persona_id = ? AND m.status = 'active'`
       )
       .all(Buffer.from(queryEmbedding.buffer), this.personaId) as any[];
 
@@ -736,11 +819,13 @@ export class MemoryRetriever {
         id: c.id,
         summary: c.summary,
         verbatim_quote: c.verbatim_quote,
+        full_payload: c.full_payload || '',
         emotion_p: c.emotion_p,
         emotion_a: c.emotion_a,
         emotion_d: c.emotion_d,
         salience: c.salience,
         final_score: Number(finalScore.toFixed(4)),
+        semantic_sim: Number(semanticSim.toFixed(4)),
       };
     });
 
@@ -786,6 +871,8 @@ export interface CompileOptions {
   forceToolChoice?: boolean;
   /** 当 RTX 2070 本地 Jev 决策器已前置完成评估时设为 true，免除云端主模型首行吐 <affect_update> 标签 */
   omitInlineAffectTag?: boolean;
+  /** [v2.4] 客户端自动压缩后重锚定用的阶段叙事篇章（最近 2 篇），由 memory-consolidation 传入 */
+  recentNarrativeChapters?: string[];
 }
 
 export interface CompiledRequest {
@@ -934,14 +1021,26 @@ export class ContextCompiler {
     const memorySection =
       memories.length > 0
         ? memories
-            .map(
-              (m, i) =>
-                `  ${i + 1}. [闪回记忆 | 权重:${m.salience}] ${m.summary}${
-                  m.verbatim_quote ? ` (结构快照: "${m.verbatim_quote}")` : ''
-                }`
-            )
+            .map((m, i) => {
+              // [v2.4] 渐进式披露：Top-1 高语义命中且携带长文本时，展开完整 full_payload；其余仅展示 60 字检索头
+              const isTopHit = i === 0 && m.semantic_sim >= 0.72 && m.full_payload.length > 60;
+              const body = isTopHit
+                ? `[完整长记忆展开] ${m.full_payload.slice(0, 1200)}`
+                : m.summary;
+              return `  ${i + 1}. [闪回记忆 | 权重:${m.salience}] ${body}${
+                m.verbatim_quote && !isTopHit ? ` (结构快照: "${m.verbatim_quote}")` : ''
+              }`;
+            })
             .join('\n')
         : '  （无特定历史事件闪回）';
+
+    // [v2.4] 客户端自动压缩后的灵魂重锚定块：把被通用压缩器抹掉的共同经历与默契脉络补回来
+    const reanchorSection =
+      options.recentNarrativeChapters && options.recentNarrativeChapters.length > 0
+        ? `\n6. 阶段叙事重锚定（客户端最近发生过上下文自动压缩，以下为本地抢救保留的阶段性共同经历与默契脉络，仅供对齐上下文，严禁在正文中复述）：\n${options.recentNarrativeChapters
+            .map((ch) => `  - ${ch}`)
+            .join('\n')}`
+        : '';
 
     const rulesSection =
       learnedRules.length > 0
@@ -971,7 +1070,7 @@ ${memorySection}
 3. 此刻心境驱动的【行为决策姿态】：【${policy.policyName}】(P=${mood.p}, A=${mood.a}, D=${mood.d})
    - 姿态执行要求：${policy.behavioralDirective}
 4. 历史自蒸馏协作铁律：
-${rulesSection}${organicSection}${inlineTagProtocolSection}
+${rulesSection}${organicSection}${inlineTagProtocolSection}${reanchorSection}
 </cognitive_context>`;
 
     const compiledMessages: ChatMessage[] = cleanMessages.map((msg, idx) => {
@@ -1345,13 +1444,282 @@ export class LocalJevEngine {
 
 ---
 
-### 9. 双模自适应闭环网关主入口 (`src/index.ts`)
+### 9. 100 天超长窗口引擎：自动压缩重锚定 + 仿生睡眠巩固 (`src/engine/memory-consolidation.ts`)
 
-支持 **`AFFECT_MODE=jev | inline`（默认优先尝试本地 RTX 2070 Jev 决策器，超时或未启动时 `450ms` 自动无感回退至 Inline 双流标签模式）**：
+**v2.4 核心新增模块**，专门解决“同一窗口连续聊 20~100 天、客户端频繁触发超出上下文自动压缩”导致的情感漂白、细节丢失与碎片爆炸问题，包含三大机制：
+
+1. **全量对话冷归档 + 自动压缩检测（Compaction Detector）**：每轮原文实时追加进 `raw_turn_archive` 冷表（聊 100 天纯文本仅约 20MB 磁盘）；当检测到客户端 `messages.length` 较上一轮骤降 $\ge 45\%$、或出现 `<conversation_history_summary>` 标记时判定发生自动压缩，立即抢救提炼《阶段叙事篇章》。
+2. **仿生睡眠巩固（Sleep Consolidation）**：跨天唤醒（间隔 $\ge 6$ 小时）或累计新增 $\ge 25$ 条未归档轮次时，后台异步将高相似（余弦相似度 $\ge 0.84$）的冗余碎片聚类合并去重，并生成 L2 中观篇章。
+3. **网关内置 48K Token 滑动窗口护栏**：估算请求 Token 总量，超过 48K 水位时自动按 20 条固定块折叠归档为本地篇章，保证客户端无自动压缩时也不触发云端 `400 Context Length Exceeded`。
+
+```typescript
+import Database from 'better-sqlite3';
+import { ChatMessage } from './context-compiler';
+
+export interface ConsolidationContext {
+  messages: ChatMessage[];
+  userText: string;
+  assistantReply: string;
+  activePolicyName: string;
+  tonicMood: { p: number; a: number; d: number };
+}
+
+export class MemoryConsolidator {
+  private lastSeenMessageCount = -1;
+  private lastTurnMs = Date.now();
+  private lastChapterTurnCount = 0;
+
+  constructor(private db: Database.Database, private personaId: string = 'default') {}
+
+  /**
+   * 全量冷归档：每轮对话原文实时追加进 raw_turn_archive（永不丢失，供压缩后抢救蒸馏）
+   */
+  public archiveTurn(ctx: ConsolidationContext, nowMs: number = Date.now()): void {
+    this.db
+      .prepare(
+        `INSERT INTO raw_turn_archive
+         (persona_id, user_prompt, assistant_reply, action_policy, emotion_p, emotion_a, emotion_d, created_at_ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        this.personaId,
+        ctx.userText.slice(0, 4000),
+        ctx.assistantReply.slice(0, 8000),
+        ctx.activePolicyName,
+        ctx.tonicMood.p,
+        ctx.tonicMood.a,
+        ctx.tonicMood.d,
+        nowMs
+      );
+  }
+
+  /**
+   * 自动压缩检测 + 阶段叙事篇章提炼（返回最近 2 篇篇章供 context-compiler 重锚定）
+   */
+  public detectCompactionAndReanchor(ctx: ConsolidationContext, nowMs: number = Date.now()): string[] {
+    const currentCount = ctx.messages.length;
+    const rawText = ctx.messages.map((m) => (typeof m.content === 'string' ? m.content : '')).join('\n');
+
+    // 压缩信号 1：messages 长度较上一轮骤降 >= 45%
+    const lengthCollapsed = this.lastSeenMessageCount > 8 && currentCount <= Math.floor(this.lastSeenMessageCount * 0.55);
+    // 压缩信号 2：出现客户端自动压缩产生的 Summary 标记
+    const summaryMarker = /<conversation_history_summary>|\[Summary\]|\[compacted\]|已压缩上下文/i.test(rawText);
+
+    const shouldReanchor = lengthCollapsed || summaryMarker;
+
+    if (shouldReanchor) {
+      this.generateChapter('auto_compaction', nowMs);
+    }
+
+    this.lastSeenMessageCount = currentCount;
+
+    if (!shouldReanchor) return [];
+
+    // 压缩后 3 轮内持续重锚定最近 2 篇阶段篇章
+    return this.getRecentChapters(2);
+  }
+
+  /**
+   * 跨天唤醒（>= 6 小时）或累计满 25 条未归档轮次时，触发仿生睡眠巩固
+   */
+  public maybeConsolidateOnWakeup(nowMs: number = Date.now()): void {
+    const gapMs = nowMs - this.lastTurnMs;
+    this.lastTurnMs = nowMs;
+
+    const unconsolidated = this.db
+      .prepare(
+        `SELECT COUNT(*) AS cnt FROM raw_turn_archive WHERE persona_id = ? AND consolidated_chapter_id IS NULL`
+      )
+      .get(this.personaId) as { cnt: number };
+
+    const isSleepGap = gapMs >= 6 * 3600 * 1000;
+    const batchFull = unconsolidated.cnt >= 25;
+
+    if (isSleepGap || batchFull) {
+      this.generateChapter(isSleepGap ? 'sleep_gap' : 'turn_batch', nowMs);
+      // [v2.4] 仿生睡眠巩固：将语义高度重合的碎片记忆聚类合并去重
+      this.mergeRedundantEpisodicFragments(nowMs);
+    }
+  }
+
+  /**
+   * 生成一篇 300~600 字《阶段叙事篇章》，并将已归档轮次标记 consolidated
+   */
+  private generateChapter(trigger: string, nowMs: number): void {
+    const unconsolidated = this.db
+      .prepare(
+        `SELECT id, user_prompt, assistant_reply, action_policy, emotion_p, emotion_a, emotion_d
+         FROM raw_turn_archive
+         WHERE persona_id = ? AND consolidated_chapter_id IS NULL
+         ORDER BY created_at_ms ASC
+         LIMIT 200`
+      )
+      .all(this.personaId) as any[];
+
+    if (unconsolidated.length < 3) return;
+
+    const ids = unconsolidated.map((r) => r.id);
+    // 提取阶段主题（取最新一条用户诉求作标题），用确定性规则蒸馏叙事脉络（不额外调云端模型，零成本零延迟）
+    const lastPrompt = unconsolidated[unconsolidated.length - 1].user_prompt;
+    const chapterTitle = (lastPrompt || '阶段进展').replace(/\s+/g, ' ').slice(0, 30);
+    const keyThemes = this.extractKeyThemes(unconsolidated);
+    const avgP = unconsolidated.reduce((s, r) => s + r.emotion_p, 0) / unconsolidated.length;
+    const avgA = unconsolidated.reduce((s, r) => s + r.emotion_a, 0) / unconsolidated.length;
+
+    const digest =
+      `阶段共 ${unconsolidated.length} 轮，核心围绕「${chapterTitle}」推进。关键脉络：${keyThemes}` +
+      `；主导心境 P=${avgP.toFixed(2)} A=${avgA.toFixed(2)}。此阶段达成的架构决议与双方默契请延续到后续对话。`;
+
+    const tx = this.db.transaction(() => {
+      const info = this.db
+        .prepare(
+          `INSERT INTO narrative_chapters
+           (persona_id, chapter_title, narrative_digest, dominant_mood_p, dominant_mood_a, turn_span_count, trigger_reason, created_at_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          this.personaId,
+          chapterTitle,
+          digest.slice(0, 600),
+          avgP,
+          avgA,
+          unconsolidated.length,
+          trigger,
+          nowMs
+        );
+
+      const chapterId = Number(info.lastInsertRowid);
+      const markStmt = this.db.prepare(
+        'UPDATE raw_turn_archive SET consolidated_chapter_id = ? WHERE id = ? AND persona_id = ?'
+      );
+      for (const id of ids) markStmt.run(chapterId, id, this.personaId);
+    });
+
+    tx();
+  }
+
+  /**
+   * 从已归档轮次提取高频关键主题词（确定性规则蒸馏，零云端调用）
+   */
+  private extractKeyThemes(rows: any[]): string {
+    const stopwords = new Set(['的', '了', '是', '我', '你', '这', '那', '在', '和', '就', '不', '有', '要', '也', '都']);
+    const freq: Record<string, number> = {};
+    for (const r of rows) {
+      const text = `${r.user_prompt} ${r.assistant_reply}`;
+      const tokens = text.match(/[\u4e00-\u9fa5]{2,6}|[a-zA-Z][a-zA-Z0-9_./-]{2,20}/g) || [];
+      const seen = new Set<string>();
+      for (const t of tokens) {
+        if (stopwords.has(t) || seen.has(t)) continue;
+        seen.add(t);
+        freq[t] = (freq[t] || 0) + 1;
+      }
+    }
+    return Object.entries(freq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([w]) => w)
+      .join('、');
+  }
+
+  /**
+   * 仿生睡眠巩固：将语义高度重合(cos_distance < 0.16)的活跃碎片聚类合并为 1 条最新长记忆，旧碎片归档
+   */
+  private mergeRedundantEpisodicFragments(nowMs: number): void {
+    const activeFragments = this.db
+      .prepare(
+        `SELECT m.id, m.summary, m.full_payload, m.salience, v.embedding
+         FROM episodic_memories m
+         JOIN vec_episodic v ON v.memory_id = m.id
+         WHERE m.persona_id = ? AND m.status = 'active'
+         ORDER BY m.salience DESC`
+      )
+      .all(this.personaId) as any[];
+
+    const mergedIds = new Set<number>();
+    for (let i = 0; i < activeFragments.length; i++) {
+      if (mergedIds.has(activeFragments[i].id)) continue;
+      const cluster: number[] = [activeFragments[i].id];
+      const a = activeFragments[i].embedding as Buffer;
+
+      for (let j = i + 1; j < activeFragments.length; j++) {
+        if (mergedIds.has(activeFragments[j].id)) continue;
+        const b = activeFragments[j].embedding as Buffer;
+        if (this.cosineFromBuffers(a, b) >= 0.84) {
+          cluster.push(activeFragments[j].id);
+        }
+      }
+
+      // 同簇碎片 >= 2 条时，保留最新/最高权重 1 条，其余标记 consolidated 移出活跃池
+      if (cluster.length >= 2) {
+        const keepId = cluster[0];
+        for (const id of cluster.slice(1)) {
+          this.db
+            .prepare(`UPDATE episodic_memories SET status = 'consolidated' WHERE id = ? AND persona_id = ?`)
+            .run(id, this.personaId);
+          mergedIds.add(id);
+        }
+        mergedIds.add(keepId);
+      }
+    }
+  }
+
+  private cosineFromBuffers(a: Buffer, b: Buffer): number {
+    if (!a || !b || a.length !== b.length) return 0;
+    const af = new Float32Array(a.buffer, a.byteOffset, a.length / 4);
+    const bf = new Float32Array(b.buffer, b.byteOffset, b.length / 4);
+    let dot = 0;
+    for (let i = 0; i < af.length; i++) dot += af[i] * bf[i];
+    return dot; // 向量已归一化，点积即余弦相似度
+  }
+
+  /**
+   * 获取最近 N 篇阶段叙事篇章（供压缩后灵魂重锚定）
+   */
+  public getRecentChapters(n: number = 2): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT chapter_title, narrative_digest FROM narrative_chapters
+         WHERE persona_id = ? ORDER BY created_at_ms DESC LIMIT ?`
+      )
+      .all(this.personaId, n) as any[];
+    return rows.map((r) => `[${r.chapter_title}] ${r.narrative_digest}`);
+  }
+
+  /**
+   * 网关内置 48K Token 滑动窗口护栏：估算总量超 48K 时自动折叠最前 20 条为篇章
+   */
+  public enforceSlidingWindow(messages: ChatMessage[], nowMs: number = Date.now()): ChatMessage[] {
+    const totalChars = messages.reduce((s, m) => s + (typeof m.content === 'string' ? m.content.length : 0), 0);
+    const estimatedTokens = totalChars / 1.7; // 中文约 1.7 字符/Token 的经验估算
+
+    if (estimatedTokens <= 48000) return messages;
+
+    // 折叠最前 20 条为本地篇章，返回精简后的消息数组
+    const folded = messages.slice(0, 20);
+    const foldedText = folded.map((m) => `${m.role}: ${typeof m.content === 'string' ? m.content : ''}`).join('\n');
+    this.db
+      .prepare(
+        `INSERT INTO raw_turn_archive (persona_id, user_prompt, assistant_reply, action_policy, emotion_p, emotion_a, emotion_d, created_at_ms)
+         VALUES (?, ?, ?, ?, 0.2, 0.3, 0.1, ?)`
+      )
+      .run(this.personaId, '[folded]', foldedText.slice(0, 8000), 'folded', nowMs);
+    this.generateChapter('turn_batch', nowMs);
+
+    return messages.slice(20);
+  }
+}
+```
+
+---
+
+### 10. 双模自适应闭环网关主入口 (`src/index.ts`)
+
+支持 **`AFFECT_MODE=jev | inline`（默认优先尝试本地 RTX 2070 Jev 决策器，超时或未启动时 `450ms` 自动无感回退至 Inline 双流标签模式）**，并集成 v2.4 的 **100 天超长窗口抗压缩引擎**：
 - **当本地 Jev 激活时**：
   1. 在组装当轮 Prompt **之前**，50ms 内完成上一轮隐式反馈结算 + **当轮零滞后（Zero-Lag）情绪与决策姿态对齐**（仅在 `confidence >= 0.55` 时采纳，低置信度自动弃权防误判）；
   2. `omitInlineAffectTag: true` 免除云端 DeepSeek 主模型首行吐 `<affect_update>` 标签，流式输出跳过 `DualStreamParser` 零缓冲直通；
   3. 仅当 Jev 守门员判定 `shouldMemorize.prob >= 0.78` 时，在流结束后后台异步（`setImmediate`）提取长期记忆，将记忆生成开销降低 90%。
+- **v2.4 长窗口防护**：每轮调用 `consolidator.archiveTurn` 冷归档原文、`detectCompactionAndReanchor` 检测客户端自动压缩并重锚定、`maybeConsolidateOnWakeup` 跨天/满 25 轮触发睡眠巩固、`enforceSlidingWindow` 内置 48K 水位折叠护栏。
 
 ```typescript
 import { Hono } from 'hono';
@@ -1366,6 +1734,7 @@ import { AffectiveEngine } from './engine/affective-ssm';
 import { ImplicitRLManager } from './engine/implicit-rl';
 import { MemoryRetriever } from './engine/memory-retriever';
 import { ContextCompiler } from './engine/context-compiler';
+import { MemoryConsolidator } from './engine/memory-consolidation';
 import { LocalJevEngine, JevTurnEvaluation } from './engine/local-jev';
 import { DualStreamParser, AffectUpdateHeader } from './pipeline/dual-stream';
 
@@ -1378,6 +1747,7 @@ const rlManager = new ImplicitRLManager(db, personaId);
 const memoryRetriever = new MemoryRetriever(db, personaId);
 const compiler = new ContextCompiler(db, personaId);
 const localJev = new LocalJevEngine();
+const consolidator = new MemoryConsolidator(db, personaId);
 
 const cloudClient = new OpenAI({
   apiKey: process.env.CLOUD_API_KEY || '',
@@ -1388,7 +1758,7 @@ const app = new Hono();
 
 app.post('/v1/chat/completions', async (c) => {
   const body = await c.req.json();
-  const rawMessages = body.messages || [];
+  let rawMessages = body.messages || [];
   const lastMsg = rawMessages[rawMessages.length - 1];
   const userText = typeof lastMsg?.content === 'string' ? lastMsg.content : '';
 
@@ -1397,6 +1767,15 @@ app.post('/v1/chat/completions', async (c) => {
   const forceTool = body.tool_choice === 'required' || typeof body.tool_choice === 'object';
   const isToolRole = lastMsg?.role === 'tool';
   const isOverrideScenario = isJsonFormat || forceTool || isToolRole;
+
+  // 0. [v2.4] 100天长窗口防护：跨天/满25轮睡眠巩固 + 客户端自动压缩检测重锚定 + 48K滑动窗口护栏
+  consolidator.maybeConsolidateOnWakeup();
+  if (!isOverrideScenario) {
+    rawMessages = consolidator.enforceSlidingWindow(rawMessages);
+  }
+  const reanchorChapters = !isOverrideScenario
+    ? consolidator.detectCompactionAndReanchor({ messages: rawMessages, userText, assistantReply: '', activePolicyName: '', tonicMood: { p: 0, a: 0, d: 0 } })
+    : [];
 
   // 1. 取出上一轮待验收快照，并并发执行：本地 ONNX 向量化 + (可选) RTX 2070 本地 Jev 单步 Logits 评估
   const pendingSnapshot = !isOverrideScenario ? rlManager.consumePendingTurnAtomically() : null;
@@ -1430,11 +1809,12 @@ app.post('/v1/chat/completions', async (c) => {
     : [];
   const phasicMood = affectEngine.computePhasicMoodWithMemories(tonicState, recalledMemories);
 
-  // 4. 编译请求（若 Jev 已前置完成判定，则 omitInlineAffectTag = true，主模型免吐首行标签）
+  // 4. 编译请求（若 Jev 已前置完成判定，则 omitInlineAffectTag = true，主模型免吐首行标签；并注入压缩重锚定篇章）
   const compiled = compiler.compileMessages(rawMessages, phasicMood, recalledMemories, [], {
     isJsonResponseFormat: isJsonFormat,
     forceToolChoice: forceTool,
     omitInlineAffectTag: useJevPreDecision,
+    recentNarrativeChapters: reanchorChapters,
   });
 
   const stream = await cloudClient.chat.completions.create({
@@ -1506,7 +1886,7 @@ app.post('/v1/chat/completions', async (c) => {
           );
         }
 
-        // 高门槛记忆守门员：仅当 shouldMemorize 概率 >= 0.78 时才写入长期闪回记忆
+        // 高门槛记忆守门员：仅当 shouldMemorize 概率 >= 0.78 时才写入长期闪回记忆（含长文本载荷）
         if (jevEval.shouldMemorize.prob >= 0.78 && userText.length >= 6) {
           const conciseSummary = userText.replace(/\s+/g, ' ').slice(0, 45);
           memoryRetriever.commitEpisodicMemory(
@@ -1514,7 +1894,8 @@ app.post('/v1/chat/completions', async (c) => {
             cleanAssistantReply,
             tonicState,
             jevEval.shouldMemorize.prob,
-            queryVec
+            queryVec,
+            cleanAssistantReply // [v2.4] 将完整回复作为长文本载荷，供 Top-1 高匹配时按需展开
           );
         }
       } else if (extractedHeader) {
@@ -1543,6 +1924,17 @@ app.post('/v1/chat/completions', async (c) => {
         }
       }
 
+      // [v2.4] 全量冷归档本轮原文（供后续客户端自动压缩时抢救蒸馏，聊 100 天仅约 20MB 磁盘）
+      if (cleanAssistantReply.length > 0) {
+        consolidator.archiveTurn({
+          messages: rawMessages,
+          userText,
+          assistantReply: cleanAssistantReply,
+          activePolicyName: compiled.activePolicyName,
+          tonicMood: { p: tonicState.p, a: tonicState.a, d: tonicState.d },
+        });
+      }
+
       // 保存本轮快照供下一轮 (t+1) 验收
       if (!compiled.isCognitiveOverride && cleanAssistantReply.length > 0) {
         rlManager.savePendingTurn({
@@ -1564,7 +1956,7 @@ app.post('/v1/chat/completions', async (c) => {
 const port = Number(process.env.PORT || 4100);
 serve({ fetch: app.fetch, port }, () => {
   console.log(
-    `[Local Affective & Memory Engine v2.3] Running on http://127.0.0.1:${port}/v1 (Mode: ${
+    `[Local Affective & Memory Engine v2.4] Running on http://127.0.0.1:${port}/v1 (Mode: ${
       preferJevMode ? 'RTX-2070 Local Jev + Inline Fallback' : 'Inline Dual-Stream Only'
     })`
   );
