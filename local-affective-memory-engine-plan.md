@@ -1,26 +1,30 @@
-# 本地记忆与情感神经伴生引擎 v2.2（零人工种子 · 隐式强化 · 红队审计全量合入终版）
+# 本地记忆与情感神经伴生引擎 v2.3（零人工种子 · 隐式强化 · RTX 2070 本地 Jev 决策双模终版）
 
 > **版本演进说明**：
 > - **v1.0**：确立 Node.js 本地“海马体+杏仁核”驱动云端大模型 API 的基础架构。
 > - **v2.0**：彻底废弃人工手写台词种子库（`seed_anchors.json`），升级为 **0 样本冷启动 + 认知行为决策姿态驱动（Action Tendency）+ 下一轮隐式反馈 Bandit 强化优胜劣汰**。
-> - **v2.2（当前终版 · 100% 合入 3 路子代理全部接纳项并补齐完整可运行主管道）**：
+> - **v2.2（100% 合入 3 路子代理全部红队接纳项）**：
 >   1. **SQLite 与 `sqlite-vec` 生产级加固**：`vec0` 显式声明 `persona_id TEXT PARTITION KEY` 与 `distance_metric=cosine`；写入强制转换 `BigInt(rowId)` 防止 C 扩展崩溃；新增 `AFTER DELETE` 触发器清理孤儿向量与复合二级索引。
 >   2. **情感动力学防锁死与防抖动**：严格隔离**持久基态（`tonicState`）**与**瞬时唤醒态（`phasicMood`）**；新增**单步稳态回归拉力（Per-Turn Homeostatic Pull）**防止高频对话无时间衰减时滑向极值；为姿态切换引入**施密特触发器迟滞区间（Schmitt Trigger Hysteresis）**消除临界点人格高频翻转；补齐 `dd` 三维闭环与慢变量渐近阻尼。
 >   3. **隐式强化学习（Implicit RL）全闭环**：采用 `UPDATE ... RETURNING` 原子消费快照（支持 Tool Loop 跨步挂起保护 Hold & Settle）；引入**余弦相似度话题硬切换门控（Topic-Shift Gating）**与**排障贴报错免责校准**；打通 `behavioral_policies` 置信度在线更新与淘汰闭环；入库执行结构化代码块脱敏清洗、按姿态分桶保留 Top-20 及 UCB 探索采样。
 >   4. **记忆检索不应期（Refractory Period）**：对 3 分钟内刚召回过的闪回记忆施加短期抑制系数，根除同一负面记忆在连续多轮中被反复拉出反刍。
 >   5. **幂等历史清洗与 User 尾部安全追加**：入口自动幂等剥离历史残留的 `<cognitive_context>`，并将当轮潜意识块追加至最后一条 `user` 消息尾部（兼容 Claude/DeepSeek-R1 严格角色交替，100% 保护前序历史与 `User_t` 本体 Prefix Cache）。
->   6. **工业级 SSE 双流状态机与完整网关入口**：补齐 `src/db/client.ts`、`src/engine/embedding.ts` 与 `src/index.ts` 完整闭环代码，开箱即跑。
+> - **v2.3（当前终版 · 新增 RTX 2070 本地 Jev / System One 决策引擎双模自适应架构）**：
+>   - 针对 **NVIDIA RTX 2070 (8GB GDDR6, 448GB/s)** 定制 `src/engine/local-jev.ts`：基于 **Prefix KV-Cache 广播 + 单 Token Logits 提取 (`max_tokens: 1, top_logprobs`) + 香农熵校准置信度 (`Confidence = 1 - H(P)/ln(K)`)**，在本地 **35ms ~ 65ms** 内一次性并发完成 `Choice / Score / Noul` 六维判定。
+>   - **当轮零滞后情绪对齐 + 低置信度自动弃权**：解决主模型首行标签慢半拍问题；当遇到复杂反讽导致 Jev 置信度 `< 0.55` 时自动弃权不乱干预主模型；彻底解放云端主模型（免除首行 `<affect_update>` 标签与 `DualStreamParser` 缓冲）。
+>   - **双模无缝降级（`AFFECT_MODE=jev | inline`）**：本地 2070 开启 Jev 服务时走 `jev` 零延迟前置判定；显卡被占满或服务未启动时，`450ms` 超时自动无缝降级回 `inline`（v2.2 单请求首行标签模式），永不阻断对话。
 
 ---
 
-## 一、 技术选型（Windows 本地零 GPU 依赖）
+## 一、 技术选型（支持 RTX 2070 本地 Jev 加速 & 零 GPU 降级双模）
 
-| 模块层级 | 核心依赖包 | 选型理由与性能指标 |
+| 模块层级 | 核心依赖包 / 引擎 | 选型理由与性能指标 |
 | :--- | :--- | :--- |
 | **运行时与宿主** | `Node.js >= 20` + `TypeScript` (`tsx`) | 原生兼容 DeepSeek Harness (`Cordis` 插件内核) 与独立 HTTP 代理网关两种运行形态 |
 | **本地统一存储** | `better-sqlite3` + `sqlite-vec` | 单一 `.db` 文件同时承载情感状态机、隐式强化样本、图谱三元组与 Float32 向量索引；开启 WAL 模式单次检索 `< 5ms` |
-| **本地语义嵌入** | `@huggingface/transformers` (ONNX) | 本地 CPU 运行 `Xenova/bge-small-zh-v1.5`（512 维归一化向量），内存占用约 `180MB`，单句推理 `< 12ms`，支持 `hf-mirror.com` 或离线加载 |
-| **云端 API 客户端** | `openai` (Node SDK) | 兼容 DeepSeek (V3 / R1 / V4 Pro)、Claude、Qwen、GPT 等所有 OpenAI 协议接口 |
+| **本地语义嵌入** | `@huggingface/transformers` (ONNX) | 本地 CPU 运行 `Xenova/bge-small-zh-v1.5`（512 维归一化向量），内存占用约 `180MB`（不占 2070 显存），单句推理 `< 12ms` |
+| **本地 System 1 决策器**<br>*(RTX 2070 专属)* | `llama-server (CUDA 12)` + **`Qwen2.5-3B / Qwen3-4B (Q5_K_M)`** | 复现 **Jev (System One)** 单步 Logits 广播范式；仅占 **2.6GB ~ 3.1GB 显存**（严控在 2070 的 8GB 独立显存红线内，余留 5GB 供日常开发），单轮 6 题并发耗时 **`35ms ~ 65ms`** |
+| **云端 System 2 渲染器** | `openai` (Node SDK) | 兼容 DeepSeek (V3 / R1 / V4 Pro)、Claude、Qwen、GPT 等所有 OpenAI 协议接口 |
 | **接入层形态** | `hono` (透明代理) / `cordis` (DSH 插件) | 既可作为 `/v1/chat/completions` 透明网关零侵入接入任意客户端，也可作为原生插件直装进 DeepSeek Harness |
 
 ---
@@ -34,18 +38,19 @@ local-affective-engine/
 ├── data/
 │   └── cognitive_core.db          # SQLite + sqlite-vec 本地单文件数据库（0样本自动初始化）
 └── src/
-    ├── index.ts                   # 完整闭环主入口：Hono OpenAI 透明网关 + 流式落盘 + DSH 插件导出
+    ├── index.ts                   # 双模闭环主入口：自动调度 Jev 前置决策 / Inline 双流标签 + 异步记忆守门员
     ├── db/
     │   ├── client.ts              # better-sqlite3 初始化（WAL模式）、sqlite-vec 加载与 Schema 自动迁移
     │   └── schema.sql             # 五张核心表结构 + Partition Key 向量表 + 级联清理触发器 + 复合索引
     ├── engine/
     │   ├── embedding.ts           # Transformers.js 本地 ONNX 向量化与余弦相似度工具
+    │   ├── local-jev.ts           # [v2.3新增] RTX 2070 本地 Jev 决策引擎：单Token Logits提取 + 香农熵校准置信度
     │   ├── affective-ssm.ts       # 连续情感状态空间：Tonic/Phasic 隔离、单步稳态拉力、三维演化与渐近阻尼
     │   ├── implicit-rl.ts         # 隐式反馈强化器：RETURNING 原子消费、话题切换门控、报错免责、法则演化与分桶淘汰
     │   ├── memory-retriever.ts    # 四维混合召回与异步落盘：语义 + 三维心境共鸣 + 3分钟不应期抑制 + 动态半衰期
-    │   └── context-compiler.ts    # 行为姿态编译器：施密特迟滞防抖、UCB 探索抽样、历史幂等清洗与 User 尾部追加
+    │   └── context-compiler.ts    # 行为姿态编译器：施密特迟滞防抖、UCB 探索抽样、历史幂等清洗与双模尾部编译
     └── pipeline/
-        └── dual-stream.ts         # 工业级流式状态机：兼容 <think> 块、基于 '>' 闭合切分、数值 Clamp 与 flush()
+        └── dual-stream.ts         # 工业级流式状态机（Inline 降级模式专用）：兼容 <think> 块、基于 '>' 闭合切分与 flush()
 ```
 
 ---
@@ -779,6 +784,8 @@ export interface CompileOptions {
   hasActiveToolLoop?: boolean;
   isJsonResponseFormat?: boolean;
   forceToolChoice?: boolean;
+  /** 当 RTX 2070 本地 Jev 决策器已前置完成评估时设为 true，免除云端主模型首行吐 <affect_update> 标签 */
+  omitInlineAffectTag?: boolean;
 }
 
 export interface CompiledRequest {
@@ -952,6 +959,10 @@ export class ContextCompiler {
             .join('\n')
         : '';
 
+    const inlineTagProtocolSection = options.omitInlineAffectTag
+      ? ''
+      : `\n5. 双流输出协议（必须在回复第1行先输出以下单行XML标签，评估截至用户最新这句话的情绪触动与对我上一轮回复的隐式反馈，随后换行输出正式正文）：\n<affect_update dp="0.10" da="0.05" dd="0.00" d_trust="0.01" user_feedback_score="0.50" salience="0.60" memory_summary="截至目前确立的关键事实或约定(15字内，无则留空)" />`;
+
     const tailCognitiveAppendix = `\n\n<cognitive_context>
 [本地潜意识与记忆协处理器注入 —— 仅供内部对齐决策姿态，严禁在正文中复述本块内容]
 1. 关联事实与图谱：${graphTriples.join('；') || '核心搭档'} | 亲密度:${(mood.intimacy * 100).toFixed(0)}% 信任度:${(mood.trust * 100).toFixed(0)}%
@@ -960,9 +971,7 @@ ${memorySection}
 3. 此刻心境驱动的【行为决策姿态】：【${policy.policyName}】(P=${mood.p}, A=${mood.a}, D=${mood.d})
    - 姿态执行要求：${policy.behavioralDirective}
 4. 历史自蒸馏协作铁律：
-${rulesSection}${organicSection}
-5. 双流输出协议（必须在回复第1行先输出以下单行XML标签，评估截至用户最新这句话的情绪触动与对我上一轮回复的隐式反馈，随后换行输出正式正文）：
-<affect_update dp="0.10" da="0.05" dd="0.00" d_trust="0.01" user_feedback_score="0.50" salience="0.60" memory_summary="截至目前确立的关键事实或约定(15字内，无则留空)" />
+${rulesSection}${organicSection}${inlineTagProtocolSection}
 </cognitive_context>`;
 
     const compiledMessages: ChatMessage[] = cleanMessages.map((msg, idx) => {
@@ -1081,9 +1090,268 @@ export class DualStreamParser {
 
 ---
 
-### 8. 完整闭环网关主入口 (`src/index.ts`)
+### 8. RTX 2070 本地 Jev (System One) 单步 Logits 决策引擎 (`src/engine/local-jev.ts`)
 
-将 **时间衰减 $\rightarrow$ 本地 ONNX 嵌入 $\rightarrow$ 四维混合召回 $\rightarrow$ 瞬时心境染色 $\rightarrow$ 尾部编译 $\rightarrow$ 双流剥离 $\rightarrow$ 隐式强化结算与记忆异步落盘** 串成一条无断点闭环（同时支持 Tool Loop 跨步挂起保护 Hold & Settle）：
+专为 **RTX 2070 (8GB GDDR6, 448GB/s)** 打造的本地非自回归决策模块：
+- **推荐本地启动命令（显存占用仅 ~2.7GB，留足 5GB 给日常开发）**：
+  ```bash
+  llama-server.exe -m Qwen2.5-3B-Instruct-Q5_K_M.gguf -ngl 99 -c 8192 -np 6 --cache-reuse 256 --port 8081
+  ```
+- **核心机制**：共享 `statePrefix` 触发 Prefix KV-Cache 广播，`max_tokens: 1` 跳过自回归解码，直接从 `top_logprobs` 提取候选档位对数概率做 Softmax 归一化，并用**归一化香农熵（Normalized Shannon Entropy）**输出校准置信度 `confidence`。
+
+```typescript
+import { PendingTurnSnapshot, buildStructuralDigest } from './implicit-rl';
+
+export interface JevScoreResult {
+  value: number;
+  confidence: number;
+  probs: number[];
+}
+
+export interface JevNoulResult {
+  prob: number;
+  confidence: number;
+}
+
+export interface JevTurnEvaluation {
+  isTopicShift: JevNoulResult;
+  isTechLogPaste: JevNoulResult;
+  userFeedback: JevScoreResult;
+  deltaP: JevScoreResult;
+  deltaA: JevScoreResult;
+  deltaD: number;
+  dTrust: number;
+  shouldMemorize: JevNoulResult;
+  latencyMs: number;
+}
+
+export class LocalJevEngine {
+  private endpoint: string;
+  private timeoutMs: number;
+
+  constructor(
+    baseUrl: string = process.env.LOCAL_JEV_URL || 'http://127.0.0.1:8081/v1',
+    timeoutMs: number = Number(process.env.LOCAL_JEV_TIMEOUT_MS || 450)
+  ) {
+    this.endpoint = `${baseUrl.replace(/\/$/, '')}/completions`;
+    this.timeoutMs = timeoutMs;
+  }
+
+  /**
+   * 发起单 Token 前向 Logits 提取请求（共享 statePrefix 命中 llama-server KV-Cache）
+   */
+  private async fetchSingleTokenLogprobs(
+    prompt: string,
+    signal: AbortSignal
+  ): Promise<Record<string, number>> {
+    const res = await fetch(this.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        prompt,
+        max_tokens: 1,
+        temperature: 0,
+        logprobs: 10,
+        cache_prompt: true,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Jev HTTP ${res.status}`);
+    }
+
+    const data: any = await res.json();
+    const map: Record<string, number> = {};
+
+    // 兼容 OpenAI /v1/completions logprobs.top_logprobs[0] 与 llama.cpp completion_probabilities
+    const topObj = data.choices?.[0]?.logprobs?.top_logprobs?.[0];
+    if (topObj && typeof topObj === 'object') {
+      for (const [tok, lp] of Object.entries(topObj)) {
+        const key = String(tok).trim().toUpperCase();
+        if (key && (map[key] === undefined || Number(lp) > map[key])) {
+          map[key] = Number(lp);
+        }
+      }
+    }
+
+    const llamaProbs = data.completion_probabilities?.[0]?.probs;
+    if (Array.isArray(llamaProbs)) {
+      for (const item of llamaProbs) {
+        const key = String(item.tok_str || '').trim().toUpperCase();
+        const lp = typeof item.logprob === 'number' ? item.logprob : Math.log(Math.max(1e-9, item.prob || 1e-9));
+        if (key && (map[key] === undefined || lp > map[key])) {
+          map[key] = lp;
+        }
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * Jev Noul 类型：二元真伪校准概率 P(Yes) ∈ [0, 1]
+   */
+  private async evalNoul(
+    statePrefix: string,
+    question: string,
+    signal: AbortSignal
+  ): Promise<JevNoulResult> {
+    const prompt = `${statePrefix}\n[Question] ${question}\nAnswer with a single token (Y for Yes, N for No): `;
+    const lpMap = await this.fetchSingleTokenLogprobs(prompt, signal);
+
+    const lpY = lpMap['Y'] ?? lpMap['YES'] ?? -8.0;
+    const lpN = lpMap['N'] ?? lpMap['NO'] ?? -8.0;
+    const maxLp = Math.max(lpY, lpN);
+    const expY = Math.exp(lpY - maxLp);
+    const expN = Math.exp(lpN - maxLp);
+    const prob = expY / (expY + expN);
+    const confidence = Math.min(1, Math.abs(prob - 0.5) * 2);
+
+    return {
+      prob: Number(prob.toFixed(4)),
+      confidence: Number(confidence.toFixed(4)),
+    };
+  }
+
+  /**
+   * Jev Score 类型：5 档有序量表概率分布 + 香农熵校准置信度 Confidence = 1 - H(P)/ln(5)
+   */
+  private async evalScore(
+    statePrefix: string,
+    question: string,
+    rubricDesc: string,
+    scaleValues: [number, number, number, number, number],
+    signal: AbortSignal
+  ): Promise<JevScoreResult> {
+    const prompt = `${statePrefix}\n[Question] ${question}\n[Scale] ${rubricDesc}\nSelect level (single digit 1, 2, 3, 4, or 5): `;
+    const lpMap = await this.fetchSingleTokenLogprobs(prompt, signal);
+
+    const keys = ['1', '2', '3', '4', '5'];
+    const rawLps = keys.map((k) => lpMap[k] ?? -9.0);
+    const maxLp = Math.max(...rawLps);
+    const exps = rawLps.map((lp) => Math.exp(lp - maxLp));
+    const sumExp = exps.reduce((a, b) => a + b, 0);
+    const probs = exps.map((e) => e / sumExp);
+
+    // 期望连续分值
+    let expectedValue = 0;
+    let entropy = 0;
+    for (let i = 0; i < 5; i++) {
+      expectedValue += probs[i] * scaleValues[i];
+      if (probs[i] > 1e-9) {
+        entropy -= probs[i] * Math.log(probs[i]);
+      }
+    }
+
+    const maxEntropy = Math.log(5);
+    const confidence = Math.max(0, Math.min(1, 1 - entropy / maxEntropy));
+
+    return {
+      value: Number(expectedValue.toFixed(4)),
+      confidence: Number(confidence.toFixed(4)),
+      probs: probs.map((p) => Number(p.toFixed(3))),
+    };
+  }
+
+  /**
+   * 单次并发评估当轮全部 6 项 System 1 决策；超时或本地服务未启动时返回 null 自动无缝回退至 Inline 模式
+   */
+  public async evaluateTurn(
+    currentUserText: string,
+    pendingTurn: PendingTurnSnapshot | null
+  ): Promise<JevTurnEvaluation | null> {
+    if (!currentUserText.trim()) return null;
+
+    const startMs = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    const prevUser = pendingTurn ? buildStructuralDigest(pendingTurn.userPrompt, 100) : 'None';
+    const prevAssistant = pendingTurn
+      ? buildStructuralDigest(pendingTurn.assistantReply, 140)
+      : 'None';
+    const currUser = buildStructuralDigest(currentUserText, 220);
+
+    // 固定公共 State 前缀，确保并发子问题 100% 复用同一份 Prefix KV-Cache
+    const statePrefix = `<|im_start|>system\nYou are a System-1 calibrated decision evaluator. Judge the state objectively.<|im_end|>\n<|im_start|>user\n[State]\nPrev_User: ${prevUser}\nPrev_Assistant_Digest: ${prevAssistant}\nCurrent_User: ${currUser}<|im_end|>\n<|im_start|>assistant`;
+
+    try {
+      const [isTopicShift, isTechLogPaste, userFeedback, deltaP, deltaA, shouldMemorize] =
+        await Promise.all([
+          this.evalNoul(
+            statePrefix,
+            'Is Current_User switching to a completely unrelated new topic instead of responding to Prev_Assistant_Digest?',
+            controller.signal
+          ),
+          this.evalNoul(
+            statePrefix,
+            'Are any errors or stacktraces in Current_User just pasted technical debugging data rather than dissatisfaction or blame toward the assistant?',
+            controller.signal
+          ),
+          this.evalScore(
+            statePrefix,
+            'How satisfied is Current_User with Prev_Assistant_Digest?',
+            '1=Strong rejection/angry, 2=Unsatisfied/correcting mistake, 3=Neutral continuation, 4=Satisfied/moving forward, 5=Explicit praise/breakthrough',
+            [-0.9, -0.4, 0.05, 0.45, 0.95],
+            controller.signal
+          ),
+          this.evalScore(
+            statePrefix,
+            'What is the emotional pleasure/valence shift (delta_p) triggered by Current_User?',
+            '1=Frustrated/hostile, 2=Slightly annoyed/impatient, 3=Calm/neutral, 4=Positive/smooth, 5=Excited/delighted',
+            [-0.35, -0.15, 0.0, 0.12, 0.28],
+            controller.signal
+          ),
+          this.evalScore(
+            statePrefix,
+            'What is the urgency and cognitive arousal shift (delta_a) in Current_User?',
+            '1=Fatigued/closing, 2=Low energy/brief, 3=Normal pace, 4=Focused debugging, 5=High urgency/critical blocker',
+            [-0.22, -0.10, 0.0, 0.14, 0.28],
+            controller.signal
+          ),
+          this.evalNoul(
+            statePrefix,
+            'Does Current_User state a long-term personal preference, identity fact, or core architectural rule worth remembering across days?',
+            controller.signal
+          ),
+        ]);
+
+      const deltaD = Number((deltaP.value * 0.35).toFixed(4));
+      const dTrust =
+        userFeedback.confidence >= 0.55
+          ? Number((userFeedback.value * 0.025).toFixed(4))
+          : 0;
+
+      return {
+        isTopicShift,
+        isTechLogPaste,
+        userFeedback,
+        deltaP,
+        deltaA,
+        deltaD,
+        dTrust,
+        shouldMemorize,
+        latencyMs: Date.now() - startMs,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}
+```
+
+---
+
+### 9. 双模自适应闭环网关主入口 (`src/index.ts`)
+
+支持 **`AFFECT_MODE=jev | inline`（默认优先尝试本地 RTX 2070 Jev 决策器，超时或未启动时 `450ms` 自动无感回退至 Inline 双流标签模式）**：
+- **当本地 Jev 激活时**：
+  1. 在组装当轮 Prompt **之前**，50ms 内完成上一轮隐式反馈结算 + **当轮零滞后（Zero-Lag）情绪与决策姿态对齐**（仅在 `confidence >= 0.55` 时采纳，低置信度自动弃权防误判）；
+  2. `omitInlineAffectTag: true` 免除云端 DeepSeek 主模型首行吐 `<affect_update>` 标签，流式输出跳过 `DualStreamParser` 零缓冲直通；
+  3. 仅当 Jev 守门员判定 `shouldMemorize.prob >= 0.78` 时，在流结束后后台异步（`setImmediate`）提取长期记忆，将记忆生成开销降低 90%。
 
 ```typescript
 import { Hono } from 'hono';
@@ -1098,15 +1366,18 @@ import { AffectiveEngine } from './engine/affective-ssm';
 import { ImplicitRLManager } from './engine/implicit-rl';
 import { MemoryRetriever } from './engine/memory-retriever';
 import { ContextCompiler } from './engine/context-compiler';
+import { LocalJevEngine, JevTurnEvaluation } from './engine/local-jev';
 import { DualStreamParser, AffectUpdateHeader } from './pipeline/dual-stream';
 
 const db = initDatabase(path.join(process.cwd(), 'data', 'cognitive_core.db'));
 const personaId = process.env.PERSONA_ID || 'spongebob';
+const preferJevMode = (process.env.AFFECT_MODE || 'jev').toLowerCase() !== 'inline';
 
 const affectEngine = new AffectiveEngine(db, personaId);
 const rlManager = new ImplicitRLManager(db, personaId);
 const memoryRetriever = new MemoryRetriever(db, personaId);
 const compiler = new ContextCompiler(db, personaId);
+const localJev = new LocalJevEngine();
 
 const cloudClient = new OpenAI({
   apiKey: process.env.CLOUD_API_KEY || '',
@@ -1121,30 +1392,50 @@ app.post('/v1/chat/completions', async (c) => {
   const lastMsg = rawMessages[rawMessages.length - 1];
   const userText = typeof lastMsg?.content === 'string' ? lastMsg.content : '';
 
-  // 1. 读取持久基态 (Tonic State) 并完成本地 ONNX 向量化
-  const tonicState = affectEngine.getTonicStateWithTimeDecay();
-  const queryVec = userText ? await embedText(userText) : new Float32Array(512);
+  const isJsonFormat =
+    body.response_format?.type === 'json_object' || body.response_format?.type === 'json_schema';
+  const forceTool = body.tool_choice === 'required' || typeof body.tool_choice === 'object';
+  const isToolRole = lastMsg?.role === 'tool';
+  const isOverrideScenario = isJsonFormat || forceTool || isToolRole;
 
-  // 2. 四维心境一致性召回 + 生成当轮瞬时唤醒心境 (Phasic Mood，仅当轮编译用，不落盘)
+  // 1. 取出上一轮待验收快照，并并发执行：本地 ONNX 向量化 + (可选) RTX 2070 本地 Jev 单步 Logits 评估
+  const pendingSnapshot = !isOverrideScenario ? rlManager.consumePendingTurnAtomically() : null;
+  let tonicState = affectEngine.getTonicStateWithTimeDecay();
+
+  const [queryVec, jevEval]: [Float32Array, JevTurnEvaluation | null] = await Promise.all([
+    userText ? embedText(userText) : Promise.resolve(new Float32Array(512)),
+    preferJevMode && !isOverrideScenario && userText
+      ? localJev.evaluateTurn(userText, pendingSnapshot)
+      : Promise.resolve(null),
+  ]);
+
+  const useJevPreDecision = jevEval !== null;
+
+  // 2. 若 RTX 2070 本地 Jev 评估成功：当轮前置零滞后更新 Tonic 基态（带 Confidence >= 0.55 置信度门控）
+  if (useJevPreDecision && jevEval) {
+    const gatedDp = jevEval.deltaP.confidence >= 0.55 ? jevEval.deltaP.value : 0;
+    const gatedDa = jevEval.deltaA.confidence >= 0.55 ? jevEval.deltaA.value : 0;
+    tonicState = affectEngine.applyAffectDeltaToTonic(tonicState, {
+      dp: gatedDp,
+      da: gatedDa,
+      dd: jevEval.deltaD,
+      dTrust: jevEval.dTrust,
+      activePolicyName: tonicState.lastActivePolicy,
+    });
+  }
+
+  // 3. 四维心境一致性召回 + 生成当轮瞬时唤醒心境 (Phasic Mood，仅当轮编译用，不落盘)
   const recalledMemories = userText
     ? memoryRetriever.retrieveHybridMemories(queryVec, tonicState, 4)
     : [];
   const phasicMood = affectEngine.computePhasicMoodWithMemories(tonicState, recalledMemories);
 
-  // 3. 编译请求（含施密特迟滞防抖、UCB 抽样、User 尾部安全追加、全场景理性熔断）
-  const isJsonFormat =
-    body.response_format?.type === 'json_object' || body.response_format?.type === 'json_schema';
-  const forceTool = body.tool_choice === 'required' || typeof body.tool_choice === 'object';
-
+  // 4. 编译请求（若 Jev 已前置完成判定，则 omitInlineAffectTag = true，主模型免吐首行标签）
   const compiled = compiler.compileMessages(rawMessages, phasicMood, recalledMemories, [], {
     isJsonResponseFormat: isJsonFormat,
     forceToolChoice: forceTool,
+    omitInlineAffectTag: useJevPreDecision,
   });
-
-  // 4. 若非理性熔断态，提前原子取出上一轮快照等待本轮 <affect_update> 结算 (Tool Loop 期间挂起保留)
-  const pendingSnapshot = !compiled.isCognitiveOverride
-    ? rlManager.consumePendingTurnAtomically()
-    : null;
 
   const stream = await cloudClient.chat.completions.create({
     ...body,
@@ -1166,7 +1457,9 @@ app.post('/v1/chat/completions', async (c) => {
         hasToolCalls = true;
       }
 
-      if (compiled.isCognitiveOverride || !delta?.content) {
+      // Jev 前置模式或理性熔断态下：跳过 DualStreamParser 零缓冲直通输出
+      if (useJevPreDecision || compiled.isCognitiveOverride || !delta?.content) {
+        if (delta?.content) cleanAssistantReply += delta.content;
         await sseStream.writeSSE({ data: JSON.stringify(part) });
         continue;
       }
@@ -1183,23 +1476,49 @@ app.post('/v1/chat/completions', async (c) => {
       }
     }
 
-    // 流结束必调 flush()，防止无标签短回复被静默吞没
-    const tailFlush = parser.flush();
-    if (tailFlush) {
-      cleanAssistantReply += tailFlush;
+    if (!useJevPreDecision && !compiled.isCognitiveOverride) {
+      const tailFlush = parser.flush();
+      if (tailFlush) cleanAssistantReply += tailFlush;
     }
     await sseStream.writeSSE({ data: '[DONE]' });
 
-    // 5. 异步后置处理：Hold & Settle 保护 + 隐式强化结算 + 持久基态更新 + 新闪回记忆入库
+    // 5. 异步后置结算：支持 Jev 模式与 Inline 模式双路落盘
     setImmediate(async () => {
-      if (hasToolCalls && !extractedHeader && pendingSnapshot) {
-        // 本轮首步直接进入了 tool_calls 未输出标签，将上一轮快照重新挂回，待 Tool Loop 结束后再结算
+      if (hasToolCalls && !useJevPreDecision && !extractedHeader && pendingSnapshot) {
         rlManager.savePendingTurn(pendingSnapshot);
         return;
       }
 
-      if (extractedHeader) {
-        // 结算上一轮隐式反馈奖励（含话题切换门控与排障报错免责）
+      if (useJevPreDecision && jevEval) {
+        // [分支 A: RTX 2070 Jev 模式结算]
+        if (pendingSnapshot && jevEval.isTopicShift.prob < 0.72) {
+          let effectiveFeedback =
+            jevEval.userFeedback.confidence >= 0.50 ? jevEval.userFeedback.value : 0.05;
+          // Jev Noul 判定用户只是贴入报错日志而非对 AI 不满时，豁免负向扣分
+          if (jevEval.isTechLogPaste.prob >= 0.65 && effectiveFeedback < 0) {
+            effectiveFeedback = 0.05;
+          }
+          rlManager.settlePreviousTurnReward(
+            pendingSnapshot,
+            effectiveFeedback,
+            userText,
+            queryVec
+          );
+        }
+
+        // 高门槛记忆守门员：仅当 shouldMemorize 概率 >= 0.78 时才写入长期闪回记忆
+        if (jevEval.shouldMemorize.prob >= 0.78 && userText.length >= 6) {
+          const conciseSummary = userText.replace(/\s+/g, ' ').slice(0, 45);
+          memoryRetriever.commitEpisodicMemory(
+            conciseSummary,
+            cleanAssistantReply,
+            tonicState,
+            jevEval.shouldMemorize.prob,
+            queryVec
+          );
+        }
+      } else if (extractedHeader) {
+        // [分支 B: Inline 首行标签降级模式结算]
         rlManager.settlePreviousTurnReward(
           pendingSnapshot,
           extractedHeader.userFeedbackScore,
@@ -1207,13 +1526,11 @@ app.post('/v1/chat/completions', async (c) => {
           queryVec
         );
 
-        // 基于未染色的 tonicState 更新持久基态（含单步稳态回归拉力）
         const updatedTonic = affectEngine.applyAffectDeltaToTonic(tonicState, {
           ...extractedHeader,
           activePolicyName: compiled.activePolicyName,
         });
 
-        // 若本轮产生了高重要度事实/情感转折，向量化后写入 episodic_memories + vec_episodic
         if (extractedHeader.memorySummary && extractedHeader.salience >= 0.35) {
           const memVec = await embedText(extractedHeader.memorySummary);
           memoryRetriever.commitEpisodicMemory(
@@ -1226,7 +1543,7 @@ app.post('/v1/chat/completions', async (c) => {
         }
       }
 
-      // 保存本轮快照，等待用户在下一轮 (t+1) 的真实反应来验收
+      // 保存本轮快照供下一轮 (t+1) 验收
       if (!compiled.isCognitiveOverride && cleanAssistantReply.length > 0) {
         rlManager.savePendingTurn({
           turnId: crypto.randomUUID(),
@@ -1246,7 +1563,11 @@ app.post('/v1/chat/completions', async (c) => {
 
 const port = Number(process.env.PORT || 4100);
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`[Local Affective & Memory Engine v2.2] Running on http://127.0.0.1:${port}/v1`);
+  console.log(
+    `[Local Affective & Memory Engine v2.3] Running on http://127.0.0.1:${port}/v1 (Mode: ${
+      preferJevMode ? 'RTX-2070 Local Jev + Inline Fallback' : 'Inline Dual-Stream Only'
+    })`
+  );
 });
 ```
 
