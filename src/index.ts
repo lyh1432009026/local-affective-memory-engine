@@ -186,6 +186,42 @@ app.post('/v1/memories/search', async (c) => {
   return c.json({ results: hits });
 });
 
+// 清除记忆（支持清除当前角色记忆，或清除全库所有记忆）
+app.delete('/v1/memories', (c) => {
+  const pId = c.req.query('persona_id') || personaManager.getActivePersonaId();
+  const clearAll = c.req.query('all') === 'true' || pId === 'ALL';
+
+  const tx = db.transaction(() => {
+    if (clearAll) {
+      db.prepare('DELETE FROM episodic_memories').run();
+      db.prepare('DELETE FROM vec_episodic').run();
+      db.prepare('DELETE FROM narrative_chapters').run();
+      db.prepare('DELETE FROM raw_turn_archive').run();
+    } else {
+      db.prepare('DELETE FROM episodic_memories WHERE persona_id = ?').run(pId);
+      db.prepare('DELETE FROM vec_episodic WHERE persona_id = ?').run(pId);
+      db.prepare('DELETE FROM narrative_chapters WHERE persona_id = ?').run(pId);
+      db.prepare('DELETE FROM raw_turn_archive WHERE persona_id = ?').run(pId);
+    }
+  });
+  tx();
+  return c.json({
+    success: true,
+    message: clearAll ? '全库所有角色的情景记忆、向量索引与归档已彻底清空。' : `角色 [${pId}] 的所有情景记忆、向量索引与归档已彻底清空。`
+  });
+});
+
+// 删除单条情景记忆
+app.delete('/v1/memories/:id', (c) => {
+  const id = Number(c.req.param('id'));
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM episodic_memories WHERE id = ?').run(id);
+    db.prepare('DELETE FROM vec_episodic WHERE memory_id = ?').run(id);
+  });
+  tx();
+  return c.json({ success: true, message: `记忆 #${id} 已删除。` });
+});
+
 app.delete('/v1/personas/rule/:id', (c) => {
   const id = Number(c.req.param('id'));
   const res = db.prepare('DELETE FROM behavioral_policies WHERE id = ?').run(id);

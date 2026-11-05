@@ -499,17 +499,22 @@
               <div class="card-title">📖 L1 微观闪回情景记忆 (Episodic Memories)</div>
               <div class="card-desc">60字高密检索头 + 2000字完整长文本载荷双层解耦存储</div>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="loadMemoriesList()">🔄 刷新列表</button>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="loadMemoriesList()">🔄 刷新列表</button>
+              <button class="btn btn-danger btn-sm" onclick="clearMemories(false)">🗑️ 清除当前角色记忆</button>
+              <button class="btn btn-danger btn-sm" onclick="clearMemories(true)" style="background:#7f1d1d;color:#fee2e2;border-color:#b91c1c;">💥 清空全库所有记忆</button>
+            </div>
           </div>
           <div class="table-container">
             <table class="data-table">
               <thead>
                 <tr>
                   <th style="width: 8%;">ID</th>
-                  <th style="width: 32%;">检索头摘要 (Summary)</th>
+                  <th style="width: 30%;">检索头摘要 (Summary)</th>
                   <th>完整长文本载荷 (Full Payload)</th>
                   <th style="width: 10%;">重要度</th>
                   <th style="width: 10%;">状态</th>
+                  <th style="width: 8%; text-align: center;">操作</th>
                 </tr>
               </thead>
               <tbody id="memories-table-body">
@@ -938,7 +943,8 @@
             <td><strong>${m.summary}</strong></td>
             <td style="color:var(--text-muted);">${m.full_payload ? m.full_payload.slice(0, 80) + '...' : '(无长载荷)'}</td>
             <td><span class="pill">${(m.salience * 100).toFixed(0)}%</span></td>
-            <td><span class="status-badge" style="background:#ecfdf5;color:#059669;">${m.status}</span></td>
+            <td><span class="status-badge" style="background:${m.status==='active'?'#ecfdf5':'#f1f5f9'};color:${m.status==='active'?'#059669':'#64748b'};">${m.status}</span></td>
+            <td style="text-align: center;"><button class="btn btn-danger btn-sm" onclick="deleteSingleMemory(${m.id})">删除</button></td>
           `;
           memTbody.appendChild(tr);
         });
@@ -957,6 +963,39 @@
         });
       } catch (e) {
         console.error('加载记忆列表失败:', e);
+      }
+    }
+
+    async function clearMemories(clearAll) {
+      const targetName = clearAll ? '【全库所有角色】' : `【当前角色: ${activePersonaId}】`;
+      if (!confirm(`⚠️ 危险操作：确认彻底清空 ${targetName} 的全部长期情景记忆、向量索引、阶段叙事篇章与对话冷归档吗？\n\n清空后将从零开始重新学习累积记忆，此操作不可撤销！`)) {
+        return;
+      }
+      try {
+        const url = clearAll ? '/v1/memories?all=true' : `/v1/memories?persona_id=${activePersonaId}`;
+        const res = await fetch(url, { method: 'DELETE' });
+        const d = await res.json();
+        if (d.success) {
+          showToast(d.message || '记忆已彻底清除');
+          loadMemoriesList();
+          loadAffectiveStatus();
+        }
+      } catch (e) {
+        alert('清除失败: ' + e);
+      }
+    }
+
+    async function deleteSingleMemory(id) {
+      if (!confirm(`确认删除情景记忆 #${id}？`)) return;
+      try {
+        const res = await fetch(`/v1/memories/${id}`, { method: 'DELETE' });
+        const d = await res.json();
+        if (d.success) {
+          showToast(`记忆 #${id} 已删除`);
+          loadMemoriesList();
+        }
+      } catch (e) {
+        alert('删除失败: ' + e);
       }
     }
 
