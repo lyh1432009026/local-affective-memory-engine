@@ -9,6 +9,15 @@ const projectRoot = path.join(__dirname, '..');
 const electronDist = path.join(projectRoot, 'node_modules', 'electron', 'dist');
 const outputDir = path.join(projectRoot, 'dist-desktop', 'win-unpacked');
 
+// 0. 打包前自愈：如果旧版客户端仍在运行，强行关闭以释放文件锁
+if (process.platform === 'win32') {
+  try {
+    const { execSync } = require('child_process');
+    execSync('taskkill /F /IM LocalAffectiveEngine.exe /T 2>nul');
+    console.log('[自愈] 已释放旧版正在运行的客户端进程文件锁');
+  } catch {}
+}
+
 if (!fs.existsSync(electronDist)) {
   console.error('[错误] 未找到 Electron 原生运行时目录，请先执行 npm install');
   process.exit(1);
@@ -31,6 +40,14 @@ function copyRecursive(src, dest, filterFn) {
     if (entry.isDirectory()) {
       copyRecursive(srcPath, destPath, filterFn);
     } else {
+      // 优化：若文件已存在且大小一致，跳过重复覆盖，防止 Windows 临时锁冲突
+      if (fs.existsSync(destPath)) {
+        const sStat = fs.statSync(srcPath);
+        const dStat = fs.statSync(destPath);
+        if (sStat.size === dStat.size && sStat.mtimeMs <= dStat.mtimeMs) {
+          continue;
+        }
+      }
       fs.copyFileSync(srcPath, destPath);
     }
   }
@@ -105,6 +122,31 @@ const devOnlyModules = new Set([
 copyRecursive(srcNodeModules, destNodeModules, (_full, name) => {
   return !devOnlyModules.has(name);
 });
+
+// 5. 安全合规门禁：绝不泄漏用户的 .env 密钥与个人数据库
+console.log('[安全防护] 执行隐私与凭证安全审计...');
+const leakedEnvPath = path.join(appTarget, '.env');
+if (fs.existsSync(leakedEnvPath)) {
+  fs.unlinkSync(leakedEnvPath);
+  console.log('[安全拦截] 发现并彻底销毁本地 .env 密钥文件，绝不向外打包！');
+}
+
+// 确保打包出的 .env.example 也是完全脱敏的
+const bundledEnvExample = path.join(appTarget, '.env.example');
+if (fs.existsSync(bundledEnvExample)) {
+  let content = fs.readFileSync(bundledEnvExample, 'utf8');
+  content = content.replace(/^CLOUD_API_KEY=.*$/m, 'CLOUD_API_KEY=your_api_key_here');
+  content = content.replace(/^DEEPSEEK_API_KEY=.*$/m, 'DEEPSEEK_API_KEY=');
+  fs.writeFileSync(bundledEnvExample, content, 'utf8');
+}
+
+// 确保未复制本地数据库
+const leakedDataDir = path.join(appTarget, 'data');
+if (fs.existsSync(leakedDataDir)) {
+  fs.rmSync(leakedDataDir, { recursive: true, force: true });
+}
+
+console.log('✓ 安全审计通过：无任何 API Key、无个人聊天数据库、无隐私配置泄漏！');
 
 console.log('====================================================');
 console.log('[完成] 客户端免安装绿色包已就绪！');

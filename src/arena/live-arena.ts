@@ -31,8 +31,8 @@ export class LiveArenaManager {
   private consolidator: MemoryConsolidator;
 
   constructor(private db: Database.Database) {
-    const apiKey = process.env.CLOUD_API_KEY || 'sk-492412bf8a1c4f3e9054d365aeac46b0';
-    const baseURL = process.env.CLOUD_BASE_URL || 'http://127.0.0.1:8045/v1';
+    const apiKey = process.env.CLOUD_API_KEY || 'sk-placeholder';
+    const baseURL = process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1';
     this.modelName = process.env.CLOUD_MODEL || 'gemini-3.8-flash';
 
     this.client = new OpenAI({ apiKey, baseURL });
