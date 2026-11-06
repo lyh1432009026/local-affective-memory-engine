@@ -273,10 +273,10 @@ ${rulesSection}${organicSection}${inlineTagProtocolSection}${reanchorSection}
       return msg;
     });
 
-    // 针对知心大姐姐等强情感/共情类角色，提升温度至 0.85 增强表达丰富度与真实人情体温，杜绝死板 AI 腔
-    const isEmpatheticPersona = this.personaId === 'sister_rou' || this.personaId.includes('sister');
-    const effectiveTemp = isEmpatheticPersona ? 0.85 : policy.temperature;
-    const effectivePresence = isEmpatheticPersona ? 0.20 : policy.presencePenalty;
+    // 针对陆雪琪等清丽出尘、外冷内热型角色，微调温度与惩罚项，确保言语清丽克制，杜绝死板 AI 腔
+    const isSpecialPersona = this.personaId === 'lu_xueqi' || this.personaId.includes('xueqi') || this.personaId.includes('sister');
+    const effectiveTemp = isSpecialPersona ? 0.75 : policy.temperature;
+    const effectivePresence = isSpecialPersona ? 0.16 : policy.presencePenalty;
 
     return {
       messages: compiledMessages,
