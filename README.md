@@ -33,7 +33,34 @@
 
 ---
 
-## 二、 工程目录结构
+## 二、 极速上手与一键部署
+
+### 方式 1：Docker 容器化一键部署（零依赖 · 开箱即用）
+```bash
+# 启动（Windows）
+docker-start.bat
+
+# 启动（Linux / macOS）
+./docker-start.sh
+# 或直接运行：docker compose up -d --build
+```
+> 服务启动后直接在浏览器中访问控制台：`http://127.0.0.1:4100`。
+> 数据库与向量缓存自动持久化在本地 `data/` 目录。
+
+### 方式 2：桌面客户端（Electron 一键开箱，小白专属）
+无需安装 Node.js、Docker 或配置环境变量，双击桌面客户端即可一键托盘启动、启停引擎并可视化操作！
+
+### 方式 3：本地 Node.js 源码运行
+```bash
+npm install
+npm run bootstrap   # 一键初始化 SQLite 数据库与向量模型
+npm run build
+npm start
+```
+
+---
+
+## 三、 工程目录结构
 
 ```text
 local-affective-engine/

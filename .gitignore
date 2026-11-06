@@ -1,6 +1,8 @@
 .workbuddy/
 node_modules/
 dist/
+dist-electron/
+release/
 .env
 *.db
 *.db-shm

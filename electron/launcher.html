@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本地记忆与情感伴生引擎 - 桌面客户端控制台</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151d2e;
+      --card-border: #1e293b;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --code-bg: #030712;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 顶部导航与状态条 */
+    .header {
+      background: #0f172a;
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .app-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .app-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+    }
+
+    .app-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .app-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.running {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge.starting {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-badge.running .status-dot {
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    .btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #0284c7;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #0369a1;
+    }
+
+    .btn-success {
+      background: #059669;
+      color: white;
+    }
+    .btn-success:hover {
+      background: #047857;
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+
+    .btn-secondary {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+    }
+    .btn-secondary:hover {
+      background: #334155;
+      color: white;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* 选项卡导航 */
+    .tabs-bar {
+      display: flex;
+      background: #0d1424;
+      border-bottom: 1px solid var(--card-border);
+      padding: 0 20px;
+    }
+
+    .tab-btn {
+      padding: 12px 18px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* 主体内容区 */
+    .content-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: var(--bg);
+    }
+
+    .tab-panel {
+      display: none;
+      height: 100%;
+    }
+
+    .tab-panel.active {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 卡片通用样式 */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    /* 参数复制卡组 */
+    .param-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .param-box {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .param-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .param-value-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .param-code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    /* 常见软件接入指南折叠/卡片 */
+    .client-guide-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .client-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .client-card-header {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .client-step {
+      margin-left: 16px;
+      color: #cbd5e1;
+    }
+
+    /* 表单控件 */
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+    }
+
+    /* 终端日志面板 */
+    .console-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #030712;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      overflow: hidden;
+      min-height: 380px;
+    }
+
+    .console-header {
+      background: #0b0f19;
+      padding: 8px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1f2937;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .console-body {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #94a3b8;
+      user-select: text;
+    }
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-bottom: 2px;
+    }
+    .log-line.error { color: #f87171; }
+    .log-line.ready { color: #34d399; font-weight: bold; }
+    .log-line.start { color: #38bdf8; }
+
+    /* Web 仪表盘 iframe */
+    .web-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 8px;
+      background: white;
+    }
+
+    /* 底部提示 */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0284c7;
+      color: white;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 999;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部状态栏 -->
+  <header class="header">
+    <div class="app-brand">
+      <div class="app-logo">🧠</div>
+      <div>
+        <div class="app-title">本地伴生引擎 · 客户端控制台</div>
+        <div class="app-subtitle" id="version-label">v2.4.0 · 零部署极速开箱版</div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <div class="status-badge" id="status-badge">
+        <span class="status-dot"></span>
+        <span id="status-text">探查中...</span>
+      </div>
+
+      <button id="btn-toggle-engine" class="btn btn-success" onclick="toggleEngine()">
+        <span>▶ 启动引擎</span>
+      </button>
+
+      <button id="btn-restart-engine" class="btn btn-secondary" onclick="restartEngine()" title="重启后端伴生服务">
+        <span>🔄 重启</span>
+      </button>
+
+      <button class="btn btn-secondary" onclick="killAndFreePort()" title="如果端口4100被占用导致启动失败，点击一键强力清理">
+        <span>⚡ 释放端口</span>
+      </button>
+
+      <button class="btn btn-primary" onclick="openWebDashboard()" title="在外部默认浏览器中打开全功能网页控制台">
+        <span>🌐 网页控制台</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 选项卡导航 -->
+  <nav class="tabs-bar">
+    <button class="tab-btn active" onclick="switchTab('connect')">🔌 一键接入助手</button>
+    <button class="tab-btn" onclick="switchTab('settings')">⚙️ 快捷配置</button>
+    <button class="tab-btn" onclick="switchTab('logs')">📜 运行日志</button>
+    <button class="tab-btn" onclick="switchTab('dashboard')">🎭 伴生控制面板 (内置)</button>
+  </nav>
+
+  <!-- 主体内容 -->
+  <main class="content-area">
+
+    <!-- Tab 1: 一键接入助手 -->
+    <div class="tab-panel active" id="tab-connect">
+      <div class="card">
+        <div class="card-title">🚀 极速开箱参数（点击一键复制填入任意软件）</div>
+        <div class="card-desc">任何支持自定义 OpenAI 接口的客户端（如 Cherry Studio、NextChat、Cursor 等）均可无缝对接，立即享受长期记忆与情感伴生能力：</div>
+
+        <div class="param-grid">
+          <div class="param-box">
+            <span class="param-label">接口地址 (Base URL)</span>
+            <div class="param-value-row">
+              <span class="param-code">http://127.0.0.1:4100/v1</span>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="copyValue('http://127.0.0.1:4100/v1', 'Base URL')">复制</button>
+            </div>
+          </div>
+
+          <div class="param-box">
+            <span class="param-label">API 访问密钥 (Key)</span>
+            <div class="param-value-row">
+              <span class="param-code">sk-local-affective</span>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="copyValue('sk-local-affective', 'API Key')">复制</button>
+            </div>
+          </div>
+
+          <div class="param-box">
+            <span class="param-label">推荐模型 (Model)</span>
+            <div class="param-value-row">
+              <span class="param-code">gemini-3.8-flash</span>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="copyValue('gemini-3.8-flash', 'Model')">复制</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📖 主流聊天软件配置图文步骤</div>
+        <div class="card-desc">选择你正在使用的客户端，照着两步搞定：</div>
+
+        <div class="client-guide-grid">
+          <div class="client-card">
+            <div class="client-card-header">🍒 Cherry Studio 接入</div>
+            <ol class="client-step">
+              <li>打开设置 → <strong>模型服务</strong> → 点击 <strong>+ 添加服务商</strong>。</li>
+              <li>提供商选 <strong>OpenAI 兼容</strong>，Base URL 填入 <code>http://127.0.0.1:4100/v1</code>。</li>
+              <li>API Key 随便填（如 <code>sk-local</code>），模型填入 <code>gemini-3.8-flash</code> 即可开聊！</li>
+            </ol>
+          </div>
+
+          <div class="client-card">
+            <div class="client-card-header">💬 Chatbox / NextChat 接入</div>
+            <ol class="client-step">
+              <li>打开设置 → 模型提供商选择 <strong>OpenAI API</strong>。</li>
+              <li>API 域名/地址填入：<code>http://127.0.0.1:4100</code>。</li>
+              <li>API Key 填入任意字符串，保存即可享受无损记忆与情感对话！</li>
+            </ol>
+          </div>
+
+          <div class="client-card">
+            <div class="client-card-header">⚡ DeepSeek Harness (DSH)</div>
+            <ol class="client-step">
+              <li>引擎已原生支持 Cordis 内核，配置文件已预设 <code>local-affective-engine</code>。</li>
+              <li>重启 DSH 客户端，模型列表自动出现 <code>deepseek-flash (伴生记忆神经版)</code>。</li>
+            </ol>
+          </div>
+
+          <div class="client-card">
+            <div class="client-card-header">💻 Cursor / VSCode 接入</div>
+            <ol class="client-step">
+              <li>进入 Cursor Settings → Models → 开启 <strong>Override OpenAI Base URL</strong>。</li>
+              <li>填入 <code>http://127.0.0.1:4100/v1</code>，ApiKey 填 <code>sk-local</code>。</li>
+              <li>在对话框提问时，代码理解与记忆上下文自动由引擎注入增强。</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: 快捷配置 -->
+    <div class="tab-panel" id="tab-settings">
+      <div class="card" style="max-width: 680px;">
+        <div class="card-title">⚙️ 云端模型与网关核心参数</div>
+        <div class="card-desc">修改后点击保存，引擎将立即热更新应用，无需重启程序：</div>
+
+        <div class="form-group">
+          <label class="form-label">云端大模型 API Key (必填)</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="password" id="input-cloud-key" class="form-control" placeholder="sk-...">
+            <button class="btn btn-secondary" type="button" onclick="toggleKeyVisibility()">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">云端大模型 Base URL</label>
+          <input type="text" id="input-cloud-url" class="form-control" value="https://api.deepseek.com/v1">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">默认推理模型 (Model)</label>
+          <input type="text" id="input-cloud-model" class="form-control" value="gemini-3.8-flash" placeholder="gemini-3.8-flash 或 deepseek-chat">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">伴生决策工作模式</label>
+          <select id="select-affect-mode" class="form-control">
+            <option value="inline">Inline 双流标签降级模式 (零显存占用，推荐)</option>
+            <option value="jev">RTX 2070 Jev 本地前置决策模式 (需开启本地 llama-server)</option>
+          </select>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+          <button class="btn btn-primary" onclick="saveSettings()">💾 保存并应用设置</button>
+          <button class="btn btn-secondary" onclick="loadSettings()">🔄 重新读取</button>
+        </div>
+      </div>
+
+      <div class="card" style="max-width: 680px;">
+        <div class="card-title">🖥️ 桌面客户端体验设置</div>
+        <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="chk-auto-start" onchange="toggleAutoStart(this.checked)">
+            <span>开机随系统自动静默启动</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" checked disabled>
+            <span>点击关闭按钮时最小化到系统右下角托盘（保持伴生引擎后台守护）</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: 运行日志 -->
+    <div class="tab-panel" id="tab-logs">
+      <div class="console-container">
+        <div class="console-header">
+          <span>终端实时运行日志 (实时抓取 stdout/stderr)</span>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;">
+              <input type="checkbox" id="chk-auto-scroll" checked> 自动滚动
+            </label>
+            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="clearLogs()">清空日志</button>
+            <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;" onclick="exportLogs()">导出日志</button>
+          </div>
+        </div>
+        <div class="console-body" id="console-body">
+          <div class="log-line start">[系统] 桌面控制台准备就绪...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: 完整伴生控制面板 (内置 iframe) -->
+    <div class="tab-panel" id="tab-dashboard" style="height: 100%;">
+      <iframe id="web-dashboard-frame" class="web-frame" src="about:blank"></iframe>
+    </div>
+
+  </main>
+
+  <!-- 提示浮层 -->
+  <div class="toast" id="toast">已复制</div>
+
+  <script>
+    let isRunning = false;
+    const desktop = window.electronDesktop;
+
+    // Toast 提示
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    // 复制功能
+    function copyValue(val, label) {
+      if (desktop) {
+        desktop.copyToClipboard(val);
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(val);
+      }
+      showToast(`已复制 ${label || ''}`);
+    }
+
+    // 切换选项卡
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      const panel = document.getElementById(`tab-${tabId}`);
+      if (panel) panel.classList.add('active');
+
+      if (tabId === 'dashboard') {
+        const frame = document.getElementById('web-dashboard-frame');
+        if (!frame.src || frame.src === 'about:blank' || frame.src.endsWith('about:blank')) {
+          frame.src = 'http://127.0.0.1:4100';
+        }
+      }
+    }
+
+    // 更新状态显示
+    function updateStatusUI(status) {
+      isRunning = !!status.running;
+      const badge = document.getElementById('status-badge');
+      const txt = document.getElementById('status-text');
+      const btnToggle = document.getElementById('btn-toggle-engine');
+
+      badge.classList.remove('running', 'starting');
+
+      if (status.running) {
+        badge.classList.add('running');
+        txt.innerText = `运行中 (端口: ${status.port})`;
+        btnToggle.className = 'btn btn-danger';
+        btnToggle.innerHTML = '<span>⏹ 停止引擎</span>';
+      } else {
+        txt.innerText = `已停止`;
+        btnToggle.className = 'btn btn-success';
+        btnToggle.innerHTML = '<span>▶ 启动引擎</span>';
+      }
+    }
+
+    // 启停切换
+    async function toggleEngine() {
+      const btn = document.getElementById('btn-toggle-engine');
+      btn.disabled = true;
+
+      const badge = document.getElementById('status-badge');
+      badge.className = 'status-badge starting';
+      document.getElementById('status-text').innerText = isRunning ? '正在停止...' : '正在启动...';
+
+      if (isRunning) {
+        await desktop.stopEngine();
+        showToast('伴生引擎已关停');
+      } else {
+        const res = await desktop.startEngine();
+        if (res.success) {
+          showToast('伴生引擎启动成功！');
+        } else {
+          showToast('启动失败: ' + (res.error || '请查看运行日志'));
+        }
+      }
+      btn.disabled = false;
+    }
+
+    async function restartEngine() {
+      const btn = document.getElementById('btn-restart-engine');
+      btn.disabled = true;
+      showToast('正在重启伴生引擎...');
+      await desktop.restartEngine();
+      btn.disabled = false;
+      showToast('引擎重启完成');
+    }
+
+    async function killAndFreePort() {
+      showToast('正在检测并释放端口 4100...');
+      const res = await desktop.killPort(4100);
+      if (res.success) {
+        showToast('端口 4100 释放成功！');
+      } else {
+        showToast('未能释放端口: ' + (res.error || ''));
+      }
+    }
+
+    function openWebDashboard() {
+      if (desktop) {
+        desktop.openExternal('http://127.0.0.1:4100');
+      } else {
+        window.open('http://127.0.0.1:4100', '_blank');
+      }
+    }
+
+    // 日志追加
+    function appendLogLine(line) {
+      const body = document.getElementById('console-body');
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      if (line.includes('[错误]') || line.includes('[STDERR]') || line.includes('Error')) {
+        div.classList.add('error');
+      } else if (line.includes('[就绪]') || line.includes('Running on')) {
+        div.classList.add('ready');
+      } else if (line.includes('[启动]')) {
+        div.classList.add('start');
+      }
+      div.innerText = line;
+      body.appendChild(div);
+
+      if (document.getElementById('chk-auto-scroll').checked) {
+        body.scrollTop = body.scrollHeight;
+      }
+    }
+
+    async function clearLogs() {
+      await desktop.clearLogs();
+      document.getElementById('console-body').innerHTML = '';
+      appendLogLine('[系统] 日志已清空');
+    }
+
+    function exportLogs() {
+      const text = document.getElementById('console-body').innerText;
+      const blob = new Blob([text], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `affective-engine-logs-${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('日志已导出');
+    }
+
+    // 快捷配置
+    function toggleKeyVisibility() {
+      const el = document.getElementById('input-cloud-key');
+      el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('http://127.0.0.1:4100/v1/config');
+        if (res.ok) {
+          const d = await res.json();
+          document.getElementById('input-cloud-key').value = d.cloud_api_key || '';
+          document.getElementById('input-cloud-url').value = d.cloud_base_url || 'https://api.deepseek.com/v1';
+          document.getElementById('input-cloud-model').value = d.cloud_model || 'gemini-3.8-flash';
+          document.getElementById('select-affect-mode').value = d.affect_mode || 'inline';
+        }
+      } catch (e) {
+        console.warn('引擎暂未启动，暂不加载在线配置');
+      }
+    }
+
+    async function saveSettings() {
+      const key = document.getElementById('input-cloud-key').value.trim();
+      const url = document.getElementById('input-cloud-url').value.trim();
+      const model = document.getElementById('input-cloud-model').value.trim();
+      const mode = document.getElementById('select-affect-mode').value;
+
+      try {
+        const res = await fetch('http://127.0.0.1:4100/v1/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cloud_api_key: key,
+            cloud_base_url: url,
+            cloud_model: model,
+            affect_mode: mode
+          })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast('配置已保存并成功热重载生效！');
+        } else {
+          showToast('保存失败: ' + d.error);
+        }
+      } catch (e) {
+        showToast('保存失败，请确认引擎已启动：' + e.message);
+      }
+    }
+
+    async function toggleAutoStart(val) {
+      if (desktop) {
+        await desktop.toggleAutoStart(val);
+        showToast(val ? '已开启开机自启' : '已关闭开机自启');
+      }
+    }
+
+    // 页面初始化
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (desktop) {
+        const st = await desktop.getStatus();
+        updateStatusUI(st);
+
+        desktop.onStatusChange((newStatus) => {
+          updateStatusUI(newStatus);
+          if (newStatus.running) loadSettings();
+        });
+
+        desktop.onLog((line) => {
+          appendLogLine(line);
+        });
+
+        const logs = await desktop.getLogs();
+        logs.forEach(appendLogLine);
+
+        const isAuto = await desktop.isAutoStart();
+        document.getElementById('chk-auto-start').checked = isAuto;
+      }
+
+      setTimeout(loadSettings, 1200);
+    });
+  </script>
+</body>
+</html>

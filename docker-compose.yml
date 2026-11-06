@@ -1,0 +1,31 @@
+services:
+  affective-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: local-affective-memory-engine:latest
+    container_name: affective-memory-engine
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4100}:4100"
+    environment:
+      - NODE_ENV=production
+      - PORT=4100
+      - PERSONA_ID=${PERSONA_ID:-default}
+      - CLOUD_BASE_URL=${CLOUD_BASE_URL:-https://api.deepseek.com/v1}
+      - CLOUD_API_KEY=${CLOUD_API_KEY:-}
+      - CLOUD_MODEL=${CLOUD_MODEL:-gemini-3.8-flash}
+      - AFFECT_MODE=${AFFECT_MODE:-inline}
+      - LOCAL_JEV_URL=${LOCAL_JEV_URL:-http://host.docker.internal:8081/v1}
+      - LOCAL_JEV_TIMEOUT_MS=${LOCAL_JEV_TIMEOUT_MS:-450}
+      - HF_MIRROR=${HF_MIRROR:-https://hf-mirror.com}
+      - HF_HOME=/app/data/hf_cache
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+    extra_hosts:
+      # 允许容器内部通过 host.docker.internal 访问宿主机上运行的 Jev / Ollama 等本地小模型服务
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 挂载宿主机持久化目录（SQLite 向量数据库、模型持久缓存）
+      - ./data:/app/data
+      # 挂载宿主机 .env（若宿主机存在该文件，支持容器直接热读取/写入）
+      - ./.env:/app/.env:ro

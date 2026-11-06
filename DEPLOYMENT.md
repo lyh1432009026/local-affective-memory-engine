@@ -18,7 +18,57 @@
 
 ## 二、 快速部署（3 分钟极速上手）
 
-### 第一步：克隆仓库与安装依赖
+### 方式 0：桌面客户端（Electron 免部署 · 小白专享 · 双击即用）
+
+针对完全不懂命令行、电脑没有安装 Node.js / Docker 环境的普通用户，项目提供了专用的 **桌面开箱客户端**：
+
+1. **直接启动客户端**（日常开发或测试）：
+   * Windows 下双击运行根目录的 **`start-client.bat`**。
+   * 自动编译并唤起桌面图形窗口与系统托盘，后台服务无感自启。
+2. **打包成独立客户端发给其他人使用**（对方电脑完全零环境要求）：
+   * 双击运行根目录的 **`build-client.bat`**（或执行 `npm run client:pack`）。
+   * 构建完成后在 `release/win-unpacked/` 生成免安装绿色程序，包含 `LocalAffectiveEngine.exe`。
+   * **分发方式**：直接把 `win-unpacked` 文件夹打包发给朋友，对方**解压双击 `LocalAffectiveEngine.exe` 即可直接使用**，无需安装 Node.js、无需配置环境！
+3. **客户端核心特性**：
+   * 🎯 **一键启停/重启**：图形化启停伴生引擎，智能检测与一键释放 4100 端口；
+   * 📋 **一键参数复制**：一键复制 Base URL (`http://127.0.0.1:4100/v1`)、Key 及模型名，内置各类主流客户端接入指引；
+   * ⚙️ **在线快速配置**：界面直接填入 API Key、选择模型与决策模式，保存热生效；
+   * 🛡️ **托盘静默守护**：关闭主窗口自动最小化至系统托盘，右键托盘菜单一键管理；
+   * 📜 **终端实时日志**：实时滚动展示引擎内部运行日志，支持导出排障。
+
+---
+
+### 方式 A：Docker 容器化一键部署（推荐 · 零环境依赖）
+
+已内置官方多阶段生产 Dockerfile 与 `docker-compose.yml`，宿主机无需安装 Node.js/C++ 编译工具链即可一键拉起：
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/lyh1432009026/local-affective-memory-engine.git
+cd local-affective-memory-engine
+
+# 2. 准备配置文件（若未创建会自动从 .env.example 生成）
+cp .env.example .env
+
+# 3. 一键启动
+# Windows 用户：
+docker-start.bat
+
+# Linux / macOS 用户：
+chmod +x docker-start.sh && ./docker-start.sh
+# 或直接运行：
+docker compose up -d --build
+```
+
+* **数据持久化**：SQLite 数据库与 ONNX 向量缓存自动映射保存在宿主机 `./data/` 目录，容器销毁升级数据绝不丢失。
+* **访问控制台**：服务启动后直接访问 `http://127.0.0.1:4100`。
+* **宿主机 Jev 联动**：容器内部可通过 `http://host.docker.internal:8081/v1` 自动访问宿主机上运行的 Jev / Ollama 小模型。
+
+---
+
+### 方式 B：本地源码安装与运行
+
+#### 第一步：克隆仓库与安装依赖
 ```bash
 git clone https://github.com/lyh1432009026/local-affective-memory-engine.git
 cd local-affective-memory-engine
@@ -108,15 +158,19 @@ npm run dev
 
 ---
 
-## 四、 Windows 专属快捷脚本
+## 四、 Windows / Docker / 客户端一键脚本全集
 
-项目根目录下提供了 3 个开箱即用的 Windows 批处理/VBScript 脚本：
+项目根目录下提供了多套开箱即用的快捷脚本，满足不同使用习惯与场景：
 
-| 脚本文件 | 说明 | 使用方式 |
+| 脚本文件 | 适用场景 | 使用方式与说明 |
 | :--- | :--- | :--- |
-| **`start-engine.bat`** | 交互式启动脚本 | 双击运行，带命令提示符黑框，实时查看心境状态机日志 |
-| **`start-silent.vbs`** | 后台静默启动脚本 | 双击在后台完全静默启动（无黑框弹窗） |
-| **`stop-engine.bat`** | 一键关停脚本 | 双击自动检索并杀掉占用 4100 端口的引擎进程 |
+| **`start-client.bat`** | **桌面客户端体验** | 双击启动 Electron 桌面客户端，带系统托盘与可视化启动控制台 |
+| **`build-client.bat`** | **分发小白免安装客户端** | 一键打包出 `release/win-unpacked` 绿色包，其他人解压双击即可用 |
+| **`docker-start.bat`** | **Docker 容器化启动** | Windows Docker 环境一键构建并拉起伴生引擎后台容器 |
+| **`docker-start.sh`** | **Linux / macOS Docker** | Linux/macOS 服务器端一键构建与部署 Docker 服务 |
+| **`start-engine.bat`** | **终端服务交互运行** | 双击运行，带命令行黑框，实时查看心境状态机与日志 |
+| **`start-silent.vbs`** | **后台静默运行** | 双击在后台完全静默启动 Node 引擎（无任何黑框弹窗） |
+| **`stop-engine.bat`** | **一键关停服务** | 双击自动检索并杀掉占用 4100 端口的所有引擎进程 |
 
 ---
 

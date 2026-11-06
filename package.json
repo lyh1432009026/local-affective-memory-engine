@@ -2,16 +2,70 @@
   "name": "local-affective-memory-engine",
   "version": "2.4.0",
   "description": "本地记忆与情感神经伴生引擎 v2.4（零人工种子 · 隐式强化 · RTX 2070 Jev 双模 · 100天超长窗口抗压缩终版）",
-  "main": "src/index.ts",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc && node -e \"require('fs').copyFileSync('src/db/schema.sql', 'dist/db/schema.sql')\"",
+    "build:server": "tsc && node -e \"require('fs').copyFileSync('src/db/schema.sql', 'dist/db/schema.sql')\"",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "npm run build:server && npm run build:electron",
     "start": "node dist/index.js",
+    "client": "npm run build && electron dist-electron/main.js",
+    "client:dev": "npm run build && electron dist-electron/main.js",
+    "client:pack": "npm run build && electron-builder --dir",
+    "client:dist": "npm run build && electron-builder",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "init": "tsx scripts/bootstrap.ts",
     "persona": "tsx scripts/persona-cli.ts",
     "arena": "tsx scripts/self-play-arena.ts",
     "test": "tsx test/verify.ts"
+  },
+  "build": {
+    "appId": "cn.affective.memory.engine",
+    "productName": "LocalAffectiveEngine",
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "public/**/*",
+      "electron/launcher.html",
+      "electron/assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.example",
+        "to": ".env.example"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "本地记忆与情感伴生引擎"
+    }
   },
   "keywords": [
     "affective-engine",
@@ -34,6 +88,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
