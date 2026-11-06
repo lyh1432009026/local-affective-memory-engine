@@ -81,30 +81,29 @@ app.get('/health', (c) => {
   });
 });
 
-app.get('/v1/models', (c) => {
-  return c.json({
-    object: 'list',
-    data: [
-      {
-        id: 'deepseek-flash',
-        object: 'model',
-        created: 1793880000,
-        owned_by: 'deepseek',
-      },
-      {
-        id: 'deepseek-v4-pro',
-        object: 'model',
-        created: 1793880000,
-        owned_by: 'deepseek',
-      },
-      {
-        id: 'deepseek-chat',
-        object: 'model',
-        created: 1793880000,
-        owned_by: 'deepseek',
-      },
-    ],
-  });
+app.get('/v1/models', async (c) => {
+  const defaultModel = process.env.CLOUD_MODEL || 'gemini-3.8-flash';
+  const customList = [
+    { id: defaultModel, object: 'model', created: 1793880000, owned_by: 'custom' },
+    { id: 'deepseek-flash', object: 'model', created: 1793880000, owned_by: 'deepseek' },
+    { id: 'deepseek-chat', object: 'model', created: 1793880000, owned_by: 'deepseek' },
+  ];
+
+  try {
+    const upstream = await cloudClient.models.list();
+    if (upstream && Array.isArray(upstream.data)) {
+      const upstreamIds = new Set(upstream.data.map((m: any) => m.id));
+      const merged = [...upstream.data];
+      for (const item of customList) {
+        if (!upstreamIds.has(item.id)) {
+          merged.push(item as any);
+        }
+      }
+      return c.json({ object: 'list', data: merged });
+    }
+  } catch {}
+
+  return c.json({ object: 'list', data: customList });
 });
 
 // ==================== 【系统网关与配置 API】 ====================
@@ -116,6 +115,7 @@ app.get('/v1/config', (c) => {
     affect_mode: process.env.AFFECT_MODE || 'inline',
     cloud_base_url: process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1',
     cloud_api_key: rawKey,
+    cloud_model: process.env.CLOUD_MODEL || 'gemini-3.8-flash',
     local_jev_url: process.env.LOCAL_JEV_URL || 'http://127.0.0.1:8081/v1',
     local_jev_timeout_ms: Number(process.env.LOCAL_JEV_TIMEOUT_MS || 450),
     hf_mirror: process.env.HF_MIRROR || 'https://hf-mirror.com',
@@ -126,6 +126,7 @@ app.post('/v1/config', async (c) => {
   const body = await c.req.json();
   if (body.cloud_base_url) process.env.CLOUD_BASE_URL = body.cloud_base_url;
   if (body.cloud_api_key) process.env.CLOUD_API_KEY = body.cloud_api_key;
+  if (body.cloud_model) process.env.CLOUD_MODEL = body.cloud_model;
   if (body.affect_mode) process.env.AFFECT_MODE = body.affect_mode;
   if (body.local_jev_url) process.env.LOCAL_JEV_URL = body.local_jev_url;
   if (body.local_jev_timeout_ms) process.env.LOCAL_JEV_TIMEOUT_MS = String(body.local_jev_timeout_ms);
@@ -153,6 +154,7 @@ app.post('/v1/config', async (c) => {
     };
     if (body.cloud_base_url) updateKey('CLOUD_BASE_URL', body.cloud_base_url);
     if (body.cloud_api_key) updateKey('CLOUD_API_KEY', body.cloud_api_key);
+    if (body.cloud_model) updateKey('CLOUD_MODEL', body.cloud_model);
     if (body.affect_mode) updateKey('AFFECT_MODE', body.affect_mode);
     if (body.local_jev_url) updateKey('LOCAL_JEV_URL', body.local_jev_url);
     if (body.local_jev_timeout_ms) updateKey('LOCAL_JEV_TIMEOUT_MS', String(body.local_jev_timeout_ms));
@@ -162,6 +164,16 @@ app.post('/v1/config', async (c) => {
   }
 
   return c.json({ success: true, message: 'Configuration updated and applied.' });
+});
+
+app.get('/v1/config/upstream-models', async (c) => {
+  try {
+    const list = await cloudClient.models.list();
+    const models = (list.data || []).map((m: any) => m.id);
+    return c.json({ success: true, models });
+  } catch (err: any) {
+    return c.json({ success: false, models: [], error: err.message });
+  }
 });
 
 app.post('/v1/config/test-connection', async (c) => {
@@ -174,7 +186,13 @@ app.post('/v1/config/test-connection', async (c) => {
     const client = new OpenAI({ apiKey: testKey, baseURL: testBaseUrl });
     const list = await client.models.list();
     const duration = Date.now() - t0;
-    return c.json({ success: true, latency_ms: duration, models_count: list.data?.length || 0 });
+    const modelIds = (list.data || []).map((m: any) => m.id);
+    return c.json({
+      success: true,
+      latency_ms: duration,
+      models_count: modelIds.length,
+      models: modelIds,
+    });
   } catch (err: any) {
     return c.json({ success: false, error: err.message || 'Connection failed' });
   }
@@ -531,9 +549,20 @@ app.post('/v1/chat/completions', async (c) => {
 
   let stream: any;
   try {
-    const isGemini = String(body.model || '').toLowerCase().includes('gemini');
+    const defaultModel = process.env.CLOUD_MODEL || 'gemini-3.8-flash';
+    let targetModel = body.model || defaultModel;
+
+    // 智能模型映射与自动回退：
+    // 若上游是非 DeepSeek 官方端点，且请求了 deepseek-flash/chat 等虚拟别名，自动映射为当前配置的有效真实模型
+    const isDeepSeekUpstream = (process.env.CLOUD_BASE_URL || '').includes('deepseek.com');
+    if (!isDeepSeekUpstream && (targetModel.includes('deepseek') || targetModel === 'default' || targetModel === 'auto')) {
+      targetModel = defaultModel;
+    }
+
+    const isGemini = String(targetModel || '').toLowerCase().includes('gemini');
     const reqPayload: any = {
       ...body,
+      model: targetModel,
       messages: compiled.messages,
       temperature: compiled.temperature,
       stream: true,

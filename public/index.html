@@ -349,6 +349,27 @@
 
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">默认云端模型名称 (Default Model)</label>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="cfg-model" class="form-control" placeholder="gemini-3.8-flash" list="upstream-models-datalist">
+                <datalist id="upstream-models-datalist"></datalist>
+                <button class="btn btn-secondary btn-sm" onclick="fetchUpstreamModels()" title="从当前网关拉取真实可用模型列表">🔄 拉取网关模型</button>
+              </div>
+              <div class="form-help" id="cfg-model-help">上游网关默认调用的模型；客户端若传入 deepseek-flash 等虚拟别名将自动智能路由到此模型</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">网关可用模型 (点击一键填入)</label>
+              <div class="pill-group" id="upstream-models-pills">
+                <span class="pill" onclick="selectModel('gemini-3.8-flash')">gemini-3.8-flash</span>
+                <span class="pill" onclick="selectModel('claude-sonnet-5-5')">claude-sonnet-5-5</span>
+                <span class="pill" onclick="selectModel('claude-opus-5-5')">claude-opus-5-5</span>
+                <span class="pill" onclick="selectModel('gpt-oss-120b')">gpt-oss-120b</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
               <label class="form-label">伴生决策工作模式 (Affective Mode)</label>
               <select id="cfg-affect-mode" class="form-control">
                 <option value="inline">Inline 双流标签降级模式（零显卡依赖，云端协同，极速推荐）</option>
@@ -560,7 +581,19 @@
               <div class="card-title">💬 实时流式伴生交互沙盒 (Live Companion Sandbox)</div>
               <div class="card-desc">直接在此处与伴生引擎对话，验证当前人设口吻、思维链、长期记忆与潜意识协议注入</div>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="clearChat()">🗑️ 清空对话</button>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">沙盒调试模型:</span>
+              <select id="sandbox-model-select" class="form-control" style="width: auto; padding: 4px 10px; font-size: 12px; font-weight: 600;">
+                <option value="gemini-3.8-flash">gemini-3.8-flash (网关实装)</option>
+                <option value="deepseek-flash">deepseek-flash (智能回退测试)</option>
+                <option value="deepseek-chat">deepseek-chat (智能回退测试)</option>
+                <option value="claude-sonnet-5-5">claude-sonnet-5-5</option>
+                <option value="claude-opus-5-5">claude-opus-5-5</option>
+                <option value="gemini-4-argon">gemini-4-argon</option>
+                <option value="gpt-oss-120b">gpt-oss-120b</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearChat()">🗑️ 清空对话</button>
+            </div>
           </div>
 
           <div class="chat-box">
@@ -835,11 +868,87 @@
         const d = await res.json();
         document.getElementById('cfg-base-url').value = d.cloud_base_url || 'https://api.deepseek.com/v1';
         document.getElementById('cfg-api-key').value = d.cloud_api_key || '';
+        document.getElementById('cfg-model').value = d.cloud_model || 'gemini-3.8-flash';
         document.getElementById('cfg-affect-mode').value = d.affect_mode || 'inline';
         document.getElementById('cfg-jev-url').value = d.local_jev_url || 'http://127.0.0.1:8081/v1';
         document.getElementById('cfg-jev-timeout').value = d.local_jev_timeout_ms || 450;
+
+        // 同步沙盒默认模型
+        const sandboxSelect = document.getElementById('sandbox-model-select');
+        if (sandboxSelect && d.cloud_model) {
+          syncModelToSelects(d.cloud_model);
+        }
       } catch (e) {
         console.error('加载配置失败:', e);
+      }
+    }
+
+    function selectModel(mName) {
+      document.getElementById('cfg-model').value = mName;
+      syncModelToSelects(mName);
+      showToast(`已选模型: ${mName}`);
+    }
+
+    function syncModelToSelects(mName) {
+      const sandboxSelect = document.getElementById('sandbox-model-select');
+      if (!sandboxSelect) return;
+      let found = false;
+      for (let i = 0; i < sandboxSelect.options.length; i++) {
+        if (sandboxSelect.options[i].value === mName) {
+          sandboxSelect.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = mName;
+        opt.innerText = mName;
+        opt.selected = true;
+        sandboxSelect.insertBefore(opt, sandboxSelect.firstChild);
+      }
+    }
+
+    async function fetchUpstreamModels() {
+      const btn = event?.target;
+      if (btn) btn.innerText = '拉取中...';
+      try {
+        const res = await fetch('/v1/config/upstream-models');
+        const d = await res.json();
+        if (d.success && d.models && d.models.length > 0) {
+          renderUpstreamModels(d.models);
+          showToast(`成功获取到 ${d.models.length} 个网关可用模型！`);
+        } else {
+          showToast('未能获取到可用模型列表: ' + (d.error || '网关未响应'));
+        }
+      } catch (e) {
+        showToast('拉取异常: ' + e.message);
+      } finally {
+        if (btn) btn.innerText = '🔄 拉取网关模型';
+      }
+    }
+
+    function renderUpstreamModels(models) {
+      // 1. 填充 datalist
+      const dl = document.getElementById('upstream-models-datalist');
+      dl.innerHTML = models.map(m => `<option value="${m}">`).join('');
+
+      // 2. 渲染胶囊药丸 (取前 6 个高频模型)
+      const pills = document.getElementById('upstream-models-pills');
+      pills.innerHTML = models.slice(0, 8).map(m => `
+        <span class="pill" onclick="selectModel('${m}')">${m}</span>
+      `).join('');
+
+      // 3. 同步到沙盒下拉框
+      const sandboxSelect = document.getElementById('sandbox-model-select');
+      if (sandboxSelect) {
+        const curVal = sandboxSelect.value;
+        sandboxSelect.innerHTML = models.map(m => `
+          <option value="${m}" ${m === curVal ? 'selected' : ''}>${m}</option>
+        `).join('') + `
+          <option value="deepseek-flash">deepseek-flash (智能回退测试)</option>
+          <option value="deepseek-chat">deepseek-chat (智能回退测试)</option>
+        `;
       }
     }
 
@@ -863,6 +972,9 @@
         const d = await res.json();
         if (d.success) {
           txt.innerHTML = `<span style="color:var(--success);font-weight:bold;">✓ 接口畅通！耗时 ${d.latency_ms}ms (可用模型: ${d.models_count}个)</span>`;
+          if (d.models && d.models.length > 0) {
+            renderUpstreamModels(d.models);
+          }
         } else {
           txt.innerHTML = `<span style="color:var(--danger);font-weight:bold;">✗ 连接失败: ${d.error}</span>`;
         }
@@ -875,6 +987,7 @@
       const payload = {
         cloud_base_url: document.getElementById('cfg-base-url').value,
         cloud_api_key: document.getElementById('cfg-api-key').value,
+        cloud_model: document.getElementById('cfg-model').value.trim() || 'gemini-3.8-flash',
         affect_mode: document.getElementById('cfg-affect-mode').value,
         local_jev_url: document.getElementById('cfg-jev-url').value,
         local_jev_timeout_ms: Number(document.getElementById('cfg-jev-timeout').value),
@@ -887,6 +1000,7 @@
       const d = await res.json();
       if (d.success) {
         showToast('网关配置已更新并实时生效！');
+        syncModelToSelects(payload.cloud_model);
       }
     }
 
@@ -1052,12 +1166,14 @@
       messagesDiv.appendChild(assistantBubble);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
+      const selectedModel = document.getElementById('sandbox-model-select')?.value || 'gemini-3.8-flash';
+
       try {
         const response = await fetch('/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-persona-id': activePersonaId },
           body: JSON.stringify({
-            model: 'deepseek-flash',
+            model: selectedModel,
             messages: chatHistory,
             stream: true,
           })
@@ -1118,6 +1234,8 @@
     // Initialize
     window.onload = () => {
       loadPersonas();
+      loadGatewayConfig();
+      fetchUpstreamModels();
     };
   </script>
 </body>
