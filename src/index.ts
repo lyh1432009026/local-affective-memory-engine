@@ -7,6 +7,7 @@ import OpenAI from 'openai';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { initDatabase } from './db/client';
 import { embedText } from './engine/embedding';
 import { AffectiveEngine } from './engine/affective-ssm';
@@ -25,6 +26,10 @@ const personaManager = new PersonaManager(db);
 const arenaManager = new LiveArenaManager(db);
 const preferJevMode = (process.env.AFFECT_MODE || 'jev').toLowerCase() !== 'inline';
 const localJev = new LocalJevEngine();
+
+if (!process.env.DEEPSEEK_API_KEY && process.env.CLOUD_API_KEY) {
+  process.env.DEEPSEEK_API_KEY = process.env.CLOUD_API_KEY;
+}
 
 let cloudClient = new OpenAI({
   apiKey: process.env.CLOUD_API_KEY || 'sk-placeholder',
@@ -110,12 +115,14 @@ app.get('/v1/models', async (c) => {
 
 app.get('/v1/config', (c) => {
   const rawKey = process.env.CLOUD_API_KEY || '';
+  const dsKey = process.env.DEEPSEEK_API_KEY || (rawKey.startsWith('sk-') ? rawKey : '');
   return c.json({
     port: Number(process.env.PORT || 4100),
     affect_mode: process.env.AFFECT_MODE || 'inline',
     cloud_base_url: process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1',
     cloud_api_key: rawKey,
     cloud_model: process.env.CLOUD_MODEL || 'gemini-3.8-flash',
+    deepseek_api_key: dsKey,
     local_jev_url: process.env.LOCAL_JEV_URL || 'http://127.0.0.1:8081/v1',
     local_jev_timeout_ms: Number(process.env.LOCAL_JEV_TIMEOUT_MS || 450),
     hf_mirror: process.env.HF_MIRROR || 'https://hf-mirror.com',
@@ -130,6 +137,9 @@ app.post('/v1/config', async (c) => {
   if (body.affect_mode) process.env.AFFECT_MODE = body.affect_mode;
   if (body.local_jev_url) process.env.LOCAL_JEV_URL = body.local_jev_url;
   if (body.local_jev_timeout_ms) process.env.LOCAL_JEV_TIMEOUT_MS = String(body.local_jev_timeout_ms);
+  if (body.deepseek_api_key !== undefined) {
+    process.env.DEEPSEEK_API_KEY = body.deepseek_api_key;
+  }
 
   // 热更新 client
   cloudClient = new OpenAI({
@@ -158,12 +168,45 @@ app.post('/v1/config', async (c) => {
     if (body.affect_mode) updateKey('AFFECT_MODE', body.affect_mode);
     if (body.local_jev_url) updateKey('LOCAL_JEV_URL', body.local_jev_url);
     if (body.local_jev_timeout_ms) updateKey('LOCAL_JEV_TIMEOUT_MS', String(body.local_jev_timeout_ms));
+    if (body.deepseek_api_key !== undefined) updateKey('DEEPSEEK_API_KEY', body.deepseek_api_key);
     fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
   } catch (err) {
     console.error('Failed to write .env file:', err);
   }
 
   return c.json({ success: true, message: 'Configuration updated and applied.' });
+});
+
+// 一键写 Windows 系统/用户环境变量 DEEPSEEK_API_KEY
+app.post('/v1/config/set-sys-env', async (c) => {
+  const body = await c.req.json();
+  const key = (body.key || '').trim();
+  if (!key) {
+    return c.json({ success: false, error: 'Key 不能为空' }, 400);
+  }
+
+  return new Promise<Response>((resolve) => {
+    execFile('setx', ['DEEPSEEK_API_KEY', key], (err, stdout, stderr) => {
+      if (err) {
+        return resolve(c.json({ success: false, error: stderr || err.message }));
+      }
+      process.env.DEEPSEEK_API_KEY = key;
+      try {
+        const envPath = path.join(process.cwd(), '.env');
+        if (fs.existsSync(envPath)) {
+          let envContent = fs.readFileSync(envPath, 'utf-8');
+          const reg = new RegExp(`^DEEPSEEK_API_KEY=.*$`, 'm');
+          if (reg.test(envContent)) {
+            envContent = envContent.replace(reg, `DEEPSEEK_API_KEY=${key}`);
+          } else {
+            envContent += `\nDEEPSEEK_API_KEY=${key}`;
+          }
+          fs.writeFileSync(envPath, envContent.trim() + '\n', 'utf-8');
+        }
+      } catch {}
+      return resolve(c.json({ success: true, message: '成功写入 Windows 用户环境变量 DEEPSEEK_API_KEY！重启客户端即可永久生效。' }));
+    });
+  });
 });
 
 app.get('/v1/config/upstream-models', async (c) => {

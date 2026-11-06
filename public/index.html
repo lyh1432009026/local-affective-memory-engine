@@ -394,23 +394,112 @@
               <div class="form-help">超时将自动无感降级回 Inline 双流模式，永不阻断对话</div>
             </div>
           </div>
+
+          <!-- 客户端联网搜索凭据 -->
+          <div class="form-row" style="margin-top: 10px; padding-top: 16px; border-top: 1px dashed var(--border);">
+            <div class="form-group" style="width: 100%;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>🌐 客户端联网搜索鉴权密钥 (DEEPSEEK_API_KEY · 选填)</span>
+                <span style="font-size: 11px; font-weight: normal; color: var(--primary);">供 DSH / 第三方网关客户端联网使用</span>
+              </label>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <input type="password" id="cfg-deepseek-key" class="form-control" style="flex: 1; min-width: 240px;" placeholder="sk-... (选填，配置后新启客户端支持联网搜索)">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSearchKeyVisibility()" title="显示/隐藏密钥">👁️</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="reuseCloudKeyForSearch()" title="直接复用上方云端 API Key">📋 复用云端 Key</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="setWindowsSysEnv()" style="background: #0284c7;" title="执行 setx 永久写入 Windows 用户环境变量，新终端或客户端直接生效">⚡ 一键写入系统环境变量</button>
+              </div>
+              <div class="form-help" id="sys-env-result-text">
+                💡 <strong>为什么需要它？</strong> 当客户端（如 DeepSeek Harness）接入本地自定义网关时，其内置搜索插件强制要求读取 <code>DEEPSEEK_API_KEY</code>。若未配置该环境变量，搜索将报 <code>no API key for DEEPSEEK_API_KEY</code>。
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- 接入客户端指南卡片 -->
+        <!-- 接入客户端指南与排坑卡片 -->
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">🔌 客户端接入快速指引</div>
-              <div class="card-desc">将任意聊天客户端配置为通过伴生引擎中转，自动赋予其记忆与情感能力</div>
+              <div class="card-title">🔌 客户端接入与联网排坑全景指南</div>
+              <div class="card-desc">针对 DeepSeek Harness 及各类第三方开源客户端的接入指引与疑难排查</div>
             </div>
           </div>
-          <div style="font-size: 13px; line-height: 1.6; color: var(--text-muted);">
-            <p><strong>1. DeepSeek Harness (DSH) 接入：</strong>已在 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code> 中注入 <code>local-affective-engine</code>，重启客户端即自动连接。</p>
-            <p><strong>2. 其它通用客户端（Cursor / Cherry Studio / NextChat / Chatbox）：</strong></p>
-            <ul style="margin-left: 20px; margin-top: 6px;">
-              <li><strong>API 接口地址</strong>：<code>http://127.0.0.1:4100/v1</code></li>
-              <li><strong>API 密钥</strong>：填入任意字符（如 <code>sk-local</code>）</li>
-              <li><strong>推荐模型名称</strong>：<code>deepseek-flash</code>（深度思考伴生版）、<code>deepseek-chat</code>（极速通用版）</li>
+          
+          <!-- 快捷参数复制卡 -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px;">
+            <div style="background: var(--surface-subtle); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">接口地址 (Base URL)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <code style="font-size: 13px; font-weight: 600; color: var(--primary);">http://127.0.0.1:4100/v1</code>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyToClipboard('http://127.0.0.1:4100/v1', 'Base URL')">复制</button>
+              </div>
+            </div>
+            <div style="background: var(--surface-subtle); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">访问密钥 (API Key)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <code style="font-size: 13px; font-weight: 600; color: var(--text);">sk-local-affective</code>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyToClipboard('sk-local-affective', 'API Key')">复制</button>
+              </div>
+            </div>
+            <div style="background: var(--surface-subtle); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);">
+              <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">推荐模型 (Model)</div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <code style="font-size: 13px; font-weight: 600; color: var(--text);">gemini-3.8-flash / deepseek-chat</code>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyToClipboard('gemini-3.8-flash', 'Model')">复制</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- DSH 联网搜索排坑专题 -->
+          <div style="border: 1px solid #fed7aa; background: #fffaf5; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+            <div style="font-weight: 700; color: #c2410c; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              <span>🚨 DeepSeek Harness (DSH) 联网搜索排坑指南</span>
+            </div>
+            <div style="font-size: 12.5px; line-height: 1.6; color: #431407;">
+              <p>从官方原生切到本引擎后，若客户端搜索报红 <code>Error: DeepSeek search has no API key for "DEEPSEEK_API_KEY"</code>，这是由于 DSH 的第三方网关机制所致。任选以下一种方式即可彻底解决：</p>
+              
+              <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="background: white; border: 1px solid #ffedd5; padding: 10px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong style="color: #9a3412;">方式 1：环境变量法（最省心 · 推荐）</strong>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">在上方填入 Key 并点击「一键写入系统环境变量」，重新启动客户端即可。</div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="setWindowsSysEnv()">立即写入系统环境</button>
+                </div>
+
+                <div style="background: white; border: 1px solid #ffedd5; padding: 10px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong style="color: #9a3412;">方式 2：账号额度穿透插件（免配 Key · 白嫖官方额度）</strong>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">让第三方网关会话也能继续复用 DSH 已登录账号的官方搜索额度。</div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyToClipboard('dsh plugin install Chip-G0202/dsh-deepseek-search-account', '穿透插件安装命令')">复制安装命令</button>
+                </div>
+
+                <div style="background: white; border: 1px solid #ffedd5; padding: 10px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong style="color: #9a3412;">方式 3：第三方免 Key 搜索源（Tavily / Exa）</strong>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">切换搜索后端为免 Key 的 Tavily/Exa 通道，彻底脱离 DeepSeek 限制。</div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyToClipboard('dsh plugin install lovehin/dsh-websearch-keyless', '免Key搜索插件命令')">复制安装命令</button>
+                </div>
+              </div>
+
+              <!-- FakeIP SSRF 拦截说明 -->
+              <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #fed7aa; font-size: 12px; color: #7c2d12;">
+                <strong>⚠️ 网页获取报错 <code>resolves to a non-public IP address</code>？</strong><br>
+                这是由于开启了 Clash / sing-box 的 <strong>FakeIP 模式 (198.18.x.x)</strong> 触发了客户端的 SSRF 内网防护拦截。<br>
+                👉 <strong>解法</strong>：将代理软件的 DNS 模式切为 <code>redir-host</code>，或在 DSH 中安装放行插件：
+                <code style="background: #fef3c7; padding: 2px 6px; border-radius: 4px; font-size: 11px;">dsh plugin install bemarkt/dsh-fakeip-compat</code>
+                <a href="javascript:void(0)" onclick="copyToClipboard('dsh plugin install bemarkt/dsh-fakeip-compat', 'FakeIP插件安装命令')" style="color: #c2410c; margin-left: 6px; font-weight: bold; text-decoration: underline;">[复制命令]</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 通用客户端接入提示 -->
+          <div style="font-size: 12.5px; line-height: 1.6; color: var(--text-muted);">
+            <p><strong>2. 其它通用客户端（Cherry Studio / Chatbox / NextChat / Cursor）：</strong></p>
+            <ul style="margin-left: 20px; margin-top: 4px;">
+              <li>自定义端点填入 <code>http://127.0.0.1:4100/v1</code>，密钥填任意字符串即可。</li>
+              <li>客户端自带的联网搜索功能请在对应客户端的「工具 / 联网」设置中自行配置引擎密钥。</li>
             </ul>
           </div>
         </div>
@@ -872,6 +961,9 @@
         document.getElementById('cfg-affect-mode').value = d.affect_mode || 'inline';
         document.getElementById('cfg-jev-url').value = d.local_jev_url || 'http://127.0.0.1:8081/v1';
         document.getElementById('cfg-jev-timeout').value = d.local_jev_timeout_ms || 450;
+        if (document.getElementById('cfg-deepseek-key')) {
+          document.getElementById('cfg-deepseek-key').value = d.deepseek_api_key || '';
+        }
 
         // 同步沙盒默认模型
         const sandboxSelect = document.getElementById('sandbox-model-select');
@@ -991,6 +1083,7 @@
         affect_mode: document.getElementById('cfg-affect-mode').value,
         local_jev_url: document.getElementById('cfg-jev-url').value,
         local_jev_timeout_ms: Number(document.getElementById('cfg-jev-timeout').value),
+        deepseek_api_key: document.getElementById('cfg-deepseek-key') ? document.getElementById('cfg-deepseek-key').value.trim() : '',
       };
       const res = await fetch('/v1/config', {
         method: 'POST',
@@ -1001,6 +1094,60 @@
       if (d.success) {
         showToast('网关配置已更新并实时生效！');
         syncModelToSelects(payload.cloud_model);
+      }
+    }
+
+    function toggleSearchKeyVisibility() {
+      const el = document.getElementById('cfg-deepseek-key');
+      if (el) el.type = el.type === 'password' ? 'text' : 'password';
+    }
+
+    function reuseCloudKeyForSearch() {
+      const cloudKey = document.getElementById('cfg-api-key').value.trim();
+      if (!cloudKey) {
+        showToast('当前云端 API Key 为空，无法复用');
+        return;
+      }
+      document.getElementById('cfg-deepseek-key').value = cloudKey;
+      showToast('已复制云端 API Key 到联网搜索密钥！');
+    }
+
+    async function setWindowsSysEnv() {
+      const keyEl = document.getElementById('cfg-deepseek-key');
+      const key = keyEl ? keyEl.value.trim() : '';
+      if (!key) {
+        showToast('请先在输入框填入或复用 Key！');
+        return;
+      }
+      const txt = document.getElementById('sys-env-result-text');
+      txt.innerHTML = '<span style="color:var(--primary);">⏳ 正在执行 setx 写入 Windows 用户系统环境变量...</span>';
+      try {
+        const res = await fetch('/v1/config/set-sys-env', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        });
+        const d = await res.json();
+        if (d.success) {
+          txt.innerHTML = `<span style="color:var(--success);font-weight:bold;">✓ ${d.message}</span>`;
+          showToast('成功写入系统环境变量 DEEPSEEK_API_KEY！');
+        } else {
+          txt.innerHTML = `<span style="color:var(--danger);font-weight:bold;">✗ 写入失败: ${d.error}</span>`;
+        }
+      } catch (e) {
+        txt.innerHTML = `<span style="color:var(--danger);">✗ 请求异常: ${e.message}</span>`;
+      }
+    }
+
+    function copyToClipboard(text, label) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(`已复制${label ? ' ' + label : ''}`);
+        }).catch(() => {
+          prompt('请手动复制:', text);
+        });
+      } else {
+        prompt('请手动复制:', text);
       }
     }
 
