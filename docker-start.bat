@@ -3,12 +3,12 @@ chcp 65001 >nul
 title 启动 Local Affective Memory Engine (Docker)
 
 echo ====================================================
-echo  🚀 本地记忆与情感神经伴生引擎 - Docker 一键启动
+echo  [*] 本地记忆与情感神经伴生引擎 - Docker 一键启动
 echo ====================================================
 
 cd /d "%~dp0"
 
-:: 检查 Docker 是否安装
+rem 检查 Docker 是否安装
 where docker >nul 2>nul
 if %errorlevel% neq 0 (
     echo [错误] 未检测到 Docker 运行环境！
@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 检查 .env 文件是否存在，不存在则引导复制
+rem 检查 .env 文件是否存在，不存在则引导复制
 if not exist ".env" (
     if exist ".env.example" (
         echo [提示] 未找到 .env 配置文件，正在从 .env.example 自动生成...
@@ -28,7 +28,7 @@ if not exist ".env" (
     )
 )
 
-:: 确保 data 目录存在
+rem 确保 data 目录存在
 if not exist "data" mkdir "data"
 
 echo.
