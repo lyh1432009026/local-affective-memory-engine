@@ -34,10 +34,10 @@ if %errorlevel% neq 0 (
 echo.
 echo ====================================================
 echo [3/3] 打包完成！
-echo 独立客户端免安装绿色目录位于: release\win-unpacked\
-echo 包含独立可执行文件: release\win-unpacked\LocalAffectiveEngine.exe
+echo 独立客户端免安装绿色目录位于: dist-desktop\win-unpacked\
+echo 包含独立可执行文件: dist-desktop\win-unpacked\LocalAffectiveEngine.exe
 echo.
-echo [提示] 发送给其他人时：直接将 release\win-unpacked 整个文件夹打压缩包发给对方，
+echo [提示] 发送给其他人时：直接将 dist-desktop\win-unpacked 整个文件夹打压缩包发给对方，
 echo 对方电脑无需安装 Node.js、无需配置环境，解压双击即可运行！
 echo ====================================================
 pause

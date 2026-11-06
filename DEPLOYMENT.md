@@ -27,7 +27,7 @@
    * 自动编译并唤起桌面图形窗口与系统托盘，后台服务无感自启。
 2. **打包成独立客户端发给其他人使用**（对方电脑完全零环境要求）：
    * 双击运行根目录的 **`build-client.bat`**（或执行 `npm run client:pack`）。
-   * 构建完成后在 `release/win-unpacked/` 生成免安装绿色程序，包含 `LocalAffectiveEngine.exe`。
+   * 构建完成后在 `dist-desktop/win-unpacked/` 生成免安装绿色程序，包含 `LocalAffectiveEngine.exe`。
    * **分发方式**：直接把 `win-unpacked` 文件夹打包发给朋友，对方**解压双击 `LocalAffectiveEngine.exe` 即可直接使用**，无需安装 Node.js、无需配置环境！
 3. **客户端核心特性**：
    * 🎯 **一键启停/重启**：图形化启停伴生引擎，智能检测与一键释放 4100 端口；
@@ -165,7 +165,7 @@ npm run dev
 | 脚本文件 | 适用场景 | 使用方式与说明 |
 | :--- | :--- | :--- |
 | **`start-client.bat`** | **桌面客户端体验** | 双击启动 Electron 桌面客户端，带系统托盘与可视化启动控制台 |
-| **`build-client.bat`** | **分发小白免安装客户端** | 一键打包出 `release/win-unpacked` 绿色包，其他人解压双击即可用 |
+| **`build-client.bat`** | **分发小白免安装客户端** | 一键打包出 `dist-desktop/win-unpacked` 绿色包，其他人解压双击即可用 |
 | **`docker-start.bat`** | **Docker 容器化启动** | Windows Docker 环境一键构建并拉起伴生引擎后台容器 |
 | **`docker-start.sh`** | **Linux / macOS Docker** | Linux/macOS 服务器端一键构建与部署 Docker 服务 |
 | **`start-engine.bat`** | **终端服务交互运行** | 双击运行，带命令行黑框，实时查看心境状态机与日志 |

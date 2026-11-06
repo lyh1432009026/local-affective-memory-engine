@@ -12,6 +12,7 @@ data
 *.log
 *.tmp
 electron-dist
+dist-desktop
 release
 coverage
 test
