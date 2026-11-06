@@ -86,6 +86,11 @@ export class MemoryConsolidator {
     }
   }
 
+  public resetState(): void {
+    this.lastSeenMessageCount = -1;
+    this.lastTurnMs = Date.now();
+  }
+
   /**
    * 生成一篇 300~600 字《阶段叙事篇章》，并将已归档轮次标记 consolidated
    */
@@ -100,19 +105,36 @@ export class MemoryConsolidator {
       )
       .all(this.personaId) as any[];
 
-    if (unconsolidated.length < 3) return;
+    let targetRows = unconsolidated;
+    if (targetRows.length < 3) {
+      // 容错兜底：若当前未打标轮次不足 3 轮，回捞该角色最近的归档进行总结提炼
+      const fallbackRows = this.db
+        .prepare(
+          `SELECT id, user_prompt, assistant_reply, action_policy, emotion_p, emotion_a, emotion_d
+           FROM raw_turn_archive
+           WHERE persona_id = ?
+           ORDER BY created_at_ms DESC
+           LIMIT 20`
+        )
+        .all(this.personaId) as any[];
+      if (fallbackRows.length >= 2) {
+        targetRows = fallbackRows.reverse();
+      } else {
+        return;
+      }
+    }
 
-    const ids = unconsolidated.map((r) => r.id);
+    const ids = targetRows.map((r) => r.id);
     // 提取阶段主题（取最新一条用户诉求作标题），用确定性规则蒸馏叙事脉络（不额外调云端模型，零成本零延迟）
-    const lastPrompt = unconsolidated[unconsolidated.length - 1]?.user_prompt || '';
+    const lastPrompt = targetRows[targetRows.length - 1]?.user_prompt || '';
     const cleanPrompt = (lastPrompt || '阶段进展').replace(/[<>`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 30);
     const chapterTitle = cleanPrompt || '阶段进展';
-    const keyThemes = this.extractKeyThemes(unconsolidated);
-    const avgP = unconsolidated.reduce((s, r) => s + r.emotion_p, 0) / unconsolidated.length;
-    const avgA = unconsolidated.reduce((s, r) => s + r.emotion_a, 0) / unconsolidated.length;
+    const keyThemes = this.extractKeyThemes(targetRows);
+    const avgP = targetRows.reduce((s, r) => s + r.emotion_p, 0) / targetRows.length;
+    const avgA = targetRows.reduce((s, r) => s + r.emotion_a, 0) / targetRows.length;
 
     const digest =
-      `阶段共 ${unconsolidated.length} 轮，核心围绕「${chapterTitle}」推进。关键脉络：${keyThemes.replace(/[<>`]/g, '')}` +
+      `阶段共 ${targetRows.length} 轮，核心围绕「${chapterTitle}」推进。关键脉络：${keyThemes.replace(/[<>`]/g, '')}` +
       `；主导心境 P=${avgP.toFixed(2)} A=${avgA.toFixed(2)}。此阶段达成的架构决议与双方默契请延续到后续对话。`;
 
     const tx = this.db.transaction(() => {

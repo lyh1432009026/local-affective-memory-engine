@@ -10,6 +10,7 @@
     "bootstrap": "tsx scripts/bootstrap.ts",
     "init": "tsx scripts/bootstrap.ts",
     "persona": "tsx scripts/persona-cli.ts",
+    "arena": "tsx scripts/self-play-arena.ts",
     "test": "tsx test/verify.ts"
   },
   "keywords": [

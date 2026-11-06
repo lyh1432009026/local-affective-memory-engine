@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>实时自对决竞技场 · Local Affective Arena</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --accent: #06b6d4;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --dev-color: #ea580c;
+      --dev-bg: #fff7ed;
+      --dev-border: #ffedd5;
+      --radius: 10px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+    /* Header */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: var(--shadow);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-logo { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #ef4444, #4f46e5); display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; font-weight: bold; }
+    .brand-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+    .header-actions { display: flex; align-items: center; gap: 14px; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; background: #ecfdf5; color: #047857; font-weight: 600; font-size: 12px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
+
+    /* Layout */
+    .arena-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; padding: 20px 24px; flex: 1; max-width: 1600px; margin: 0 auto; width: 100%; }
+
+    /* Stage Panel */
+    .stage-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; box-shadow: var(--shadow); height: calc(100vh - 105px); overflow: hidden; }
+    .stage-toolbar { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
+    .turn-indicator { display: flex; align-items: center; gap: 10px; }
+    .turn-pill { background: #1e293b; color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; }
+    .turn-progress-bar { width: 200px; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; position: relative; }
+    .turn-progress-fill { height: 100%; background: linear-gradient(90deg, #4f46e5, #06b6d4); width: 0%; transition: width 0.3s; }
+    .btn-group { display: flex; gap: 8px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: var(--surface-subtle); border-color: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+    .btn-danger:hover { background: #fecaca; }
+
+    /* Messages Stream */
+    .chat-stream { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; background: #fcfcfd; }
+    .dialogue-turn { display: flex; flex-direction: column; gap: 14px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 20px; }
+    .turn-tag { align-self: center; font-size: 11px; font-weight: 700; color: #94a3b8; background: #f1f5f9; padding: 2px 10px; border-radius: 10px; }
+
+    /* Bubble Styles */
+    .bubble-wrapper { display: flex; gap: 12px; max-width: 90%; }
+    .bubble-wrapper.dev { align-self: flex-start; }
+    .bubble-wrapper.arch { align-self: flex-end; flex-direction: row-reverse; }
+
+    .avatar { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .avatar.dev { background: #ffedd5; border: 2px solid #fdba74; }
+    .avatar.arch { background: #ede9fe; border: 2px solid #c4b5fd; }
+
+    .bubble-body { display: flex; flex-direction: column; gap: 4px; }
+    .bubble-meta { font-size: 12px; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+    .bubble-wrapper.arch .bubble-meta { justify-content: flex-end; }
+    .bubble-content { padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+    .bubble-wrapper.dev .bubble-content { background: var(--dev-bg); border: 1px solid var(--dev-border); color: #7c2d12; border-top-left-radius: 2px; }
+    .bubble-wrapper.arch .bubble-content { background: #f5f3ff; border: 1px solid #ddd6fe; color: #4c1d95; border-top-right-radius: 2px; }
+
+    .affect-tag-badge { font-size: 11px; background: rgba(79, 70, 229, 0.1); color: var(--primary); padding: 2px 8px; border-radius: 6px; font-family: monospace; display: inline-block; margin-bottom: 6px; }
+    .think-fold { font-size: 11px; color: #64748b; background: rgba(0,0,0,0.04); padding: 6px 10px; border-radius: 6px; margin-bottom: 8px; font-style: italic; border-left: 3px solid #8b5cf6; }
+
+    /* Truncation Event Banner */
+    .truncation-banner { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 2px dashed #f59e0b; border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; margin: 10px 0; animation: glow 2s infinite alternate; }
+    @keyframes glow { from { box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); } to { box-shadow: 0 0 16px rgba(245, 158, 11, 0.5); } }
+    .truncation-title { font-size: 14px; font-weight: 800; color: #b45309; display: flex; align-items: center; gap: 8px; }
+    .truncation-desc { font-size: 12px; color: #92400e; line-height: 1.5; }
+    .chapter-box { background: white; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; font-size: 11px; color: #78350f; font-family: monospace; }
+
+    /* Dashboard Panel */
+    .dashboard-panel { display: flex; flex-direction: column; gap: 16px; height: calc(100vh - 105px); overflow-y: auto; }
+    .side-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+    .side-card-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* PAD Gauges */
+    .pad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+    .pad-box { background: var(--surface-subtle); padding: 10px 6px; border-radius: 8px; }
+    .pad-label { font-size: 11px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+    .pad-val { font-size: 18px; font-weight: 800; }
+    .val-danger { color: var(--danger); }
+    .val-warning { color: var(--warning); }
+    .val-success { color: var(--success); }
+
+    /* Policy Badge */
+    .policy-card { background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .policy-name { font-size: 14px; font-weight: 800; color: #a21caf; }
+    .policy-desc { font-size: 11px; color: #86198f; line-height: 1.4; }
+
+    /* Metric Bars */
+    .metric-row { margin-bottom: 10px; }
+    .metric-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .metric-bar-bg { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+    .metric-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    /* Recall Stream */
+    .recall-list { display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; }
+    .recall-item { font-size: 11px; background: var(--surface-subtle); padding: 8px 10px; border-radius: 6px; border-left: 3px solid var(--primary); line-height: 1.4; }
+    .recall-score { float: right; font-weight: 700; color: var(--primary); }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; display: none; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
+    .modal-box { background: white; width: 85%; max-width: 900px; height: 80vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { flex: 1; padding: 20px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; background: #fafafa; }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">⚔️</div>
+      <div>
+        <div class="brand-title">实时双大模型对抗竞技场 · Real-Time Affective Arena</div>
+        <div class="brand-subtitle">挑剔架构师 VS 贴报错业务开发 · 纯真实大模型在线对抗 · 零模拟数据</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="model-indicator">驱动模型: gemini-3.8-flash (网关: :8045)</span>
+      </div>
+      <a href="/ui" style="font-size: 12px; color: var(--primary); text-decoration: none; font-weight: 600;">← 返回主控制台</a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="arena-layout">
+    
+    <!-- Left Stage Panel -->
+    <div class="stage-card">
+      <div class="stage-toolbar">
+        <div class="turn-indicator">
+          <span class="turn-pill" id="turn-badge">第 00 / 30 轮</span>
+          <div class="turn-progress-bar">
+            <div class="turn-progress-fill" id="progress-fill"></div>
+          </div>
+          <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;" id="status-text">就绪待命</span>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" id="btn-start" onclick="startArenaStream()">▶️ 开始真实 30 轮在线互怼</button>
+          <button class="btn btn-secondary" id="btn-stop" onclick="stopArenaStream()" disabled>⏸️ 停止</button>
+          <button class="btn btn-danger" onclick="resetArenaData()">🧹 物理清空历史脏数据</button>
+          <button class="btn btn-secondary" onclick="openReportModal()">📄 查看最新狗粮报告</button>
+        </div>
+      </div>
+
+      <!-- Dialogue Stream -->
+      <div class="chat-stream" id="chat-stream">
+        <div style="text-align: center; color: var(--text-muted); font-size: 13px; margin: 40px auto;">
+          <div style="font-size: 40px; margin-bottom: 12px;">🎭</div>
+          <strong>暂无对决数据，点击上方【▶️ 开始真实 30 轮在线互怼】按钮</strong><br>
+          <span style="font-size: 11px; color: #94a3b8; display: block; margin-top: 6px;">
+            每一句报错堆栈、每一次毒舌批判、每一项情感指标均由 gemini-3.8-flash 实时动态生成并由伴生引擎持久化！
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Side Dashboard -->
+    <div class="dashboard-panel">
+      
+      <!-- PAD Gauges -->
+      <div class="side-card">
+        <div class="side-card-title">
+          <span>🧠 架构师连续情感基态 (Tonic)</span>
+          <span style="font-size: 10px; color: #64748b;">PAD 微分动力学</span>
+        </div>
+        <div class="pad-grid">
+          <div class="pad-box">
+            <div class="pad-label">P 愉悦度</div>
+            <div class="pad-val" id="val-p">-0.10</div>
+          </div>
+          <div class="pad-box">
+            <div class="pad-label">A 唤醒度</div>
+            <div class="pad-val" id="val-a">0.60</div>
+          </div>
+          <div class="pad-box">
+            <div class="pad-label">D 支配度</div>
+            <div class="pad-val" id="val-d">0.70</div>
+          </div>
+        </div>
+        <div style="margin-top: 14px;">
+          <div class="metric-row">
+            <div class="metric-header"><span>信任度 (Trust)</span><span id="val-trust">35.0%</span></div>
+            <div class="metric-bar-bg"><div class="metric-bar-fill" id="fill-trust" style="width: 35%; background: var(--primary);"></div></div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-header"><span>亲密度 (Intimacy)</span><span id="val-intimacy">30.0%</span></div>
+            <div class="metric-bar-bg"><div class="metric-bar-fill" id="fill-intimacy" style="width: 30%; background: #ec4899;"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Policy Card -->
+      <div class="side-card">
+        <div class="side-card-title">
+          <span>🎯 当前行为决策姿态 (Policy)</span>
+          <span style="font-size: 10px; color: #64748b;">施密特触发器</span>
+        </div>
+        <div class="policy-card">
+          <div class="policy-name" id="policy-name">熟稔默契协同姿态</div>
+          <div class="policy-desc" id="policy-desc">保持老搭档之间的自然松弛与直接，先确认核心结论再展开关键支撑。</div>
+        </div>
+      </div>
+
+      <!-- Vector KNN Recalls -->
+      <div class="side-card">
+        <div class="side-card-title">
+          <span>⚡ 真实向量记忆闪回 (sqlite-vec)</span>
+          <span style="font-size: 10px; color: #64748b;" id="recall-count">0 条</span>
+        </div>
+        <div class="recall-list" id="recall-list">
+          <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 16px;">对决启动后实时显示 KNN 召回记忆</div>
+        </div>
+      </div>
+
+      <!-- Chapters Drawer -->
+      <div class="side-card">
+        <div class="side-card-title">
+          <span>📖 《阶段叙事篇章》沉淀 (v2.4)</span>
+          <span style="font-size: 10px; color: #64748b;" id="chapter-count">0 篇</span>
+        </div>
+        <div id="chapter-list" style="font-size: 11px; color: #64748b; line-height: 1.5;">
+          第 20 轮上下文硬截断时，伴生引擎将自动在此提炼并固化篇章记忆。
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <strong style="font-size: 15px;">📄 实时纯真实狗粮报告 (Live Report)</strong>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="downloadReport()">⬇️ 下载 Markdown</button>
+          <button class="btn btn-secondary btn-sm" onclick="closeReportModal()">✕ 关闭</button>
+        </div>
+      </div>
+      <div class="modal-body" id="modal-content">正在载入报告...</div>
+    </div>
+  </div>
+
+  <script>
+    let evtSource = null;
+    let currentReportMarkdown = '';
+
+    async function resetArenaData() {
+      if (!confirm('确定要彻底清空架构师所有的历史模拟数据、向量与记忆吗？这将恢复出厂白板状态。')) return;
+      try {
+        const res = await fetch('/v1/arena/reset', { method: 'POST' });
+        const json = await res.json();
+        alert(json.message);
+        location.reload();
+      } catch (e) {
+        alert('清空失败: ' + e.message);
+      }
+    }
+
+    function startArenaStream() {
+      if (evtSource) {
+        evtSource.close();
+      }
+
+      document.getElementById('chat-stream').innerHTML = '';
+      document.getElementById('btn-start').disabled = true;
+      document.getElementById('btn-stop').disabled = false;
+      document.getElementById('status-text').innerText = '正在建立真实大模型连接...';
+
+      evtSource = new EventSource('/v1/arena/stream?turns=30&delay=600');
+
+      let currentTurnBox = null;
+
+      evtSource.addEventListener('arena_started', (e) => {
+        const data = JSON.parse(e.data);
+        document.getElementById('status-text').innerText = `正在运行 (模型: ${data.model})`;
+      });
+
+      evtSource.addEventListener('dev_speaking', (e) => {
+        const payload = JSON.parse(e.data);
+        const turn = payload.turn;
+        const total = payload.totalTurns;
+
+        // 更新进度条
+        document.getElementById('turn-badge').innerText = `第 ${turn.toString().padStart(2, '0')} / ${total} 轮`;
+        document.getElementById('progress-fill').style.width = `${(turn / total) * 100}%`;
+
+        // 创建新轮次容器
+        currentTurnBox = document.createElement('div');
+        currentTurnBox.className = 'dialogue-turn';
+        currentTurnBox.id = `turn-${turn}`;
+        currentTurnBox.innerHTML = `
+          <div class="turn-tag">🚩 第 ${turn} 轮技术交锋</div>
+          <div class="bubble-wrapper dev">
+            <div class="avatar dev">👨‍💻</div>
+            <div class="bubble-body">
+              <div class="bubble-meta">业务开发·小张 (只想早点下班)</div>
+              <div class="bubble-content">${escapeHtml(payload.data.content)}</div>
+            </div>
+          </div>
+        `;
+        document.getElementById('chat-stream').appendChild(currentTurnBox);
+        scrollToBottom();
+      });
+
+      evtSource.addEventListener('truncation_event', (e) => {
+        const payload = JSON.parse(e.data);
+        const banner = document.createElement('div');
+        banner.className = 'truncation-banner';
+        banner.innerHTML = `
+          <div class="truncation-title">⚡⚡⚡ 【第 20 轮上下文硬截断测试触发】</div>
+          <div class="truncation-desc">
+            <strong>客户端上下文达到 Token 硬上限！</strong> 对话历史从 ${payload.data.preCount} 条被强力压缩至 ${payload.data.postCount} 条！<br>
+            伴生引擎即时捕获上下文坍塌，正在从冷归档全量原文中提炼《阶段叙事篇章》入库，检验架构师在失忆后的灵魂重锚定能力！
+          </div>
+        `;
+        if (currentTurnBox) {
+          currentTurnBox.appendChild(banner);
+        } else {
+          document.getElementById('chat-stream').appendChild(banner);
+        }
+        scrollToBottom();
+      });
+
+      evtSource.addEventListener('cognition_calculated', (e) => {
+        const payload = JSON.parse(e.data);
+        const data = payload.data;
+
+        // 更新右侧动力学面板
+        updateGauges(data.tonicState);
+        updatePolicy(data.activePolicy);
+
+        // 更新召回记忆流
+        if (data.recalledMemories && data.recalledMemories.length > 0) {
+          document.getElementById('recall-count').innerText = `${data.recalledMemories.length} 条`;
+          const html = data.recalledMemories.map(m => `
+            <div class="recall-item">
+              <span class="recall-score">${m.final_score.toFixed(2)}</span>
+              <strong>"${escapeHtml(m.summary)}"</strong>
+            </div>
+          `).join('');
+          document.getElementById('recall-list').innerHTML = html;
+        }
+
+        // 更新篇章
+        if (data.recentChapters && data.recentChapters.length > 0) {
+          document.getElementById('chapter-count').innerText = `${data.recentChapters.length} 篇`;
+          document.getElementById('chapter-list').innerHTML = data.recentChapters.map((c, i) => `
+            <div style="background: #f1f5f9; padding: 8px; border-radius: 6px; margin-bottom: 6px;">
+              <strong style="color: #4f46e5;">篇章 #${i + 1}</strong>: ${escapeHtml(c)}
+            </div>
+          `).join('');
+        }
+      });
+
+      evtSource.addEventListener('architect_speaking', (e) => {
+        const payload = JSON.parse(e.data);
+        const data = payload.data;
+
+        if (currentTurnBox) {
+          const archBubble = document.createElement('div');
+          archBubble.className = 'bubble-wrapper arch';
+          archBubble.innerHTML = `
+            <div class="avatar arch">🧠</div>
+            <div class="bubble-body">
+              <div class="bubble-meta">挑剔架构师·马库斯 (伴生赋能)</div>
+              <div class="bubble-content">
+                <div class="affect-tag-badge">&lt;affect_update dp="${data.affectHeader.dp}" da="${data.affectHeader.da}" d_trust="${data.affectHeader.dTrust}" /&gt;</div>
+                ${escapeHtml(data.cleanReply)}
+              </div>
+            </div>
+          `;
+          currentTurnBox.appendChild(archBubble);
+          scrollToBottom();
+        }
+
+        updateGauges(data.updatedTonic);
+      });
+
+      evtSource.addEventListener('chapters_synced', (e) => {
+        const payload = JSON.parse(e.data);
+        renderChapters(payload.chapters);
+      });
+
+      evtSource.addEventListener('arena_finished', (e) => {
+        const data = JSON.parse(e.data);
+        document.getElementById('status-text').innerText = '✅ 对决圆满达成！';
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
+        if (data.chapters) renderChapters(data.chapters);
+        if (evtSource) evtSource.close();
+        alert('🎉 30 轮纯真实在线对抗全部完成！最新狗粮报告已生成！');
+      });
+
+      evtSource.addEventListener('error', (e) => {
+        console.error('SSE Error:', e);
+        document.getElementById('status-text').innerText = '连接中断或完成';
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
+        if (evtSource) evtSource.close();
+      });
+    }
+
+    function stopArenaStream() {
+      if (evtSource) {
+        evtSource.close();
+        evtSource = null;
+      }
+      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-stop').disabled = true;
+      document.getElementById('status-text').innerText = '已暂停';
+    }
+
+    function updateGauges(tonic) {
+      if (!tonic) return;
+      const p = tonic.p;
+      const a = tonic.a;
+      const d = tonic.d;
+
+      const pEl = document.getElementById('val-p');
+      pEl.innerText = p.toFixed(2);
+      pEl.className = 'pad-val ' + (p < -0.15 ? 'val-danger' : p > 0.15 ? 'val-success' : 'val-warning');
+
+      document.getElementById('val-a').innerText = a.toFixed(2);
+      document.getElementById('val-d').innerText = d.toFixed(2);
+
+      const trustPct = (tonic.trust * 100).toFixed(1);
+      const intimacyPct = (tonic.intimacy * 100).toFixed(1);
+
+      document.getElementById('val-trust').innerText = `${trustPct}%`;
+      document.getElementById('fill-trust').style.width = `${trustPct}%`;
+
+      document.getElementById('val-intimacy').innerText = `${intimacyPct}%`;
+      document.getElementById('fill-intimacy').style.width = `${intimacyPct}%`;
+    }
+
+    function updatePolicy(policyName) {
+      if (!policyName) return;
+      document.getElementById('policy-name').innerText = policyName;
+      let desc = '保持老搭档之间的自然松弛与直接，先确认核心结论再展开关键支撑。';
+      if (policyName === '阻断与架构止损姿态') {
+        desc = '检测到高风险或重复踩坑信号：坚决拒绝盲目修补，直接指出底层死穴，从严止损！';
+      } else if (policyName === '极简高密攻坚姿态') {
+        desc = '高频执行流：砍掉所有寒暄与过渡，第一行直给根因，紧跟规范代码与清单。';
+      }
+      document.getElementById('policy-desc').innerText = desc;
+    }
+
+    function scrollToBottom() {
+      const stream = document.getElementById('chat-stream');
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function openReportModal() {
+      const modal = document.getElementById('report-modal');
+      const content = document.getElementById('modal-content');
+      modal.style.display = 'flex';
+      content.innerText = '正在读取最新真实狗粮报告...';
+      try {
+        const res = await fetch('/v1/arena/report');
+        currentReportMarkdown = await res.text();
+        content.innerText = currentReportMarkdown;
+      } catch (e) {
+        content.innerText = '读取失败: ' + e.message;
+      }
+    }
+
+    function closeReportModal() {
+      document.getElementById('report-modal').style.display = 'none';
+    }
+
+    function downloadReport() {
+      const blob = new Blob([currentReportMarkdown], { type: 'text/markdown' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'dogfood-report-live.md';
+      a.click();
+    }
+
+    function renderChapters(chapters) {
+      if (!Array.isArray(chapters)) return;
+      document.getElementById('chapter-count').innerText = `${chapters.length} 篇`;
+      if (chapters.length === 0) {
+        document.getElementById('chapter-list').innerHTML = `
+          <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 12px;">
+            第 20 轮上下文硬截断时，伴生引擎将自动在此提炼并固化篇章记忆。
+          </div>
+        `;
+        return;
+      }
+      const html = chapters.map((c, i) => `
+        <div style="background: #fdf4ff; border: 1px solid #f5d0fe; padding: 10px; border-radius: 8px; margin-bottom: 8px; line-height: 1.4;">
+          <div style="font-weight: 800; color: #a21caf; margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>📖 篇章 #${chapters.length - i}</span>
+            <span style="font-size: 10px; color: #c084fc;">跨越 ${c.turn_span_count || 1} 轮</span>
+          </div>
+          <div style="font-weight: 700; color: #701a75; font-size: 12px; margin-bottom: 4px;">
+            ${escapeHtml(c.chapter_title || '')}
+          </div>
+          <div style="font-size: 11px; color: #86198f;">
+            ${escapeHtml(c.narrative_digest || '')}
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('chapter-list').innerHTML = html;
+    }
+
+    async function syncChaptersFromBackend() {
+      try {
+        const res = await fetch('/v1/arena/chapters');
+        const json = await res.json();
+        renderChapters(json.chapters || []);
+      } catch (e) {
+        console.warn('同步篇章失败:', e);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      syncChaptersFromBackend();
+    });
+  </script>
+</body>
+</html>

@@ -12,15 +12,17 @@ import { embedText } from './engine/embedding';
 import { AffectiveEngine } from './engine/affective-ssm';
 import { ImplicitRLManager } from './engine/implicit-rl';
 import { MemoryRetriever } from './engine/memory-retriever';
-import { ContextCompiler } from './engine/context-compiler';
+import { ContextCompiler, ChatMessage } from './engine/context-compiler';
 import { MemoryConsolidator } from './engine/memory-consolidation';
 import { LocalJevEngine, JevTurnEvaluation } from './engine/local-jev';
 import { DualStreamParser, AffectUpdateHeader } from './pipeline/dual-stream';
 import { PersonaManager, PersonaProfile } from './engine/persona-manager';
+import { LiveArenaManager } from './arena/live-arena';
 
 const dbPath = path.join(process.cwd(), 'data', 'cognitive_core.db');
 const db = initDatabase(dbPath);
 const personaManager = new PersonaManager(db);
+const arenaManager = new LiveArenaManager(db);
 const preferJevMode = (process.env.AFFECT_MODE || 'jev').toLowerCase() !== 'inline';
 const localJev = new LocalJevEngine();
 
@@ -41,6 +43,14 @@ const getDashboardHtml = () => {
   return null;
 };
 
+const getArenaHtml = () => {
+  const p1 = path.join(process.cwd(), 'public', 'arena.html');
+  if (fs.existsSync(p1)) return fs.readFileSync(p1, 'utf-8');
+  const p2 = path.join(__dirname, '..', 'public', 'arena.html');
+  if (fs.existsSync(p2)) return fs.readFileSync(p2, 'utf-8');
+  return null;
+};
+
 app.get('/', (c) => {
   const html = getDashboardHtml();
   if (html) return c.html(html);
@@ -51,6 +61,12 @@ app.get('/ui', (c) => {
   const html = getDashboardHtml();
   if (html) return c.html(html);
   return c.text('Dashboard UI not found');
+});
+
+app.get('/arena', (c) => {
+  const html = getArenaHtml();
+  if (html) return c.html(html);
+  return c.text('Arena UI not found');
 });
 
 app.get('/health', (c) => {
@@ -333,6 +349,114 @@ app.post('/v1/personas/reset', async (c) => {
   return c.json({ success: true, message: `Persona ${id} reset to factory preset.` });
 });
 
+// ==================== 【实时双大模型竞技场 API】 ====================
+
+// 1. 清空竞技场所有模拟与测试数据，恢复纯净
+app.post('/v1/arena/reset', (c) => {
+  arenaManager.resetArenaData();
+  return c.json({ success: true, message: '已彻底清空竞技场所有历史模拟数据与记忆，恢复纯净状态！' });
+});
+
+// 2. SSE 实时双 Agent 真实对抗数据流
+app.get('/v1/arena/stream', async (c) => {
+  const turns = Math.min(30, Math.max(1, Number(c.req.query('turns') || 30)));
+  const delayMs = Math.max(100, Number(c.req.query('delay') || 500));
+
+  return streamSSE(c, async (stream) => {
+    await stream.writeSSE({
+      event: 'arena_started',
+      data: JSON.stringify({
+        message: '纯真实大模型在线对抗已启动！',
+        totalTurns: turns,
+        model: process.env.CLOUD_MODEL || 'gemini-3.8-flash',
+        gateway: process.env.CLOUD_BASE_URL || 'http://127.0.0.1:8045/v1',
+      }),
+    });
+
+    const conversationHistory: ChatMessage[] = [];
+    const turnRecords: any[] = [];
+    let recentChapters: string[] = [];
+
+    // 发送当前已存在的篇章状态
+    const initialChapters = arenaManager.getChaptersList();
+    await stream.writeSSE({
+      event: 'chapters_synced',
+      data: JSON.stringify({ chapters: initialChapters }),
+    });
+
+    for (let t = 1; t <= turns; t++) {
+      try {
+        const turnResult = await arenaManager.executeLiveTurn(
+          t,
+          turns,
+          conversationHistory,
+          recentChapters,
+          async (event) => {
+            await stream.writeSSE({
+              event: event.type,
+              data: JSON.stringify(event),
+            });
+          }
+        );
+        recentChapters = turnResult.recentChapters;
+        turnRecords.push({
+          turn: t,
+          ...turnResult,
+        });
+
+        // 无论何时，向前端推送数据库最新的全部篇章
+        const currentChapters = arenaManager.getChaptersList();
+        await stream.writeSSE({
+          event: 'chapters_synced',
+          data: JSON.stringify({ chapters: currentChapters }),
+        });
+
+        // 轮间呼吸延时
+        if (t < turns && delayMs > 0) {
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      } catch (err: any) {
+        await stream.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ turn: t, error: err.message }),
+        });
+        break;
+      }
+    }
+
+    const reportFile = arenaManager.generateLiveReport(turnRecords);
+    const finalChapters = arenaManager.getChaptersList();
+    await stream.writeSSE({
+      event: 'arena_finished',
+      data: JSON.stringify({
+        message: '30 轮纯真实在线对抗圆满完成！',
+        reportPath: reportFile,
+        turnCount: turnRecords.length,
+        chapters: finalChapters,
+      }),
+    });
+  });
+});
+
+// 3. 读取最新狗粮报告
+app.get('/v1/arena/report', (c) => {
+  const reportPath = path.join(process.cwd(), 'reports', 'dogfood-report-live.md');
+  if (fs.existsSync(reportPath)) {
+    return c.text(fs.readFileSync(reportPath, 'utf-8'));
+  }
+  const fallbackPath = path.join(process.cwd(), 'reports', 'dogfood-report-20261106.md');
+  if (fs.existsSync(fallbackPath)) {
+    return c.text(fs.readFileSync(fallbackPath, 'utf-8'));
+  }
+  return c.text('# 暂未生成狗粮报告\n请先启动竞技场对决。', 404);
+});
+
+// 4. 获取当前篇章列表
+app.get('/v1/arena/chapters', (c) => {
+  const list = arenaManager.getChaptersList();
+  return c.json({ count: list.length, chapters: list });
+});
+
 app.post('/v1/chat/completions', async (c) => {
   const body = await c.req.json();
   const targetPersonaId = body.persona_id || c.req.header('x-persona-id') || personaManager.getActivePersonaId();
@@ -407,13 +531,18 @@ app.post('/v1/chat/completions', async (c) => {
 
   let stream: any;
   try {
-    stream = await cloudClient.chat.completions.create({
+    const isGemini = String(body.model || '').toLowerCase().includes('gemini');
+    const reqPayload: any = {
       ...body,
       messages: compiled.messages,
       temperature: compiled.temperature,
-      presence_penalty: compiled.presencePenalty,
       stream: true,
-    });
+    };
+    if (!isGemini && compiled.presencePenalty > 0) {
+      reqPayload.presence_penalty = compiled.presencePenalty;
+    }
+
+    stream = await cloudClient.chat.completions.create(reqPayload);
   } catch (apiErr: any) {
     if (pendingSnapshot) {
       try { rlManager.savePendingTurn(pendingSnapshot); } catch {}
