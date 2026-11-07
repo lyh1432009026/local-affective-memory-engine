@@ -33,7 +33,7 @@ export class LiveArenaManager {
   constructor(private db: Database.Database) {
     const apiKey = process.env.CLOUD_API_KEY || 'sk-placeholder';
     const baseURL = process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1';
-    this.modelName = process.env.CLOUD_MODEL || 'gemini-3.8-flash';
+    this.modelName = process.env.CLOUD_MODEL || 'deepseek-chat';
 
     this.client = new OpenAI({ apiKey, baseURL });
     this.personaManager = new PersonaManager(db);
@@ -44,6 +44,14 @@ export class LiveArenaManager {
     this.consolidator = new MemoryConsolidator(db, ARENA_PERSONA_ID);
 
     this.ensurePersonaRegistered();
+  }
+
+  /**
+   * 动态热更新竞技场的上游 API 客户端与模型
+   */
+  public updateUpstreamConfig(apiKey: string, baseURL: string, modelName: string): void {
+    this.client = new OpenAI({ apiKey, baseURL });
+    this.modelName = modelName;
   }
 
   /**
@@ -232,13 +240,28 @@ export class LiveArenaManager {
     // ----------------------------------------------------------------
     // 阶段 4：【挑剔架构师·马库斯实时在线生成】(大模型结合伴生潜意识)
     // ----------------------------------------------------------------
+    let effectiveModel = this.modelName;
+    const isDeepSeekOfficial = (process.env.CLOUD_BASE_URL || '').includes('deepseek.com');
+    if (isDeepSeekOfficial && (effectiveModel.includes('gemini') || effectiveModel === 'default' || effectiveModel === 'auto')) {
+      effectiveModel = 'deepseek-chat';
+    }
+
     const archRes = await this.client.chat.completions.create({
-      model: this.modelName,
-      messages: compiled.messages.map((m) => ({ role: m.role as any, content: m.content })),
+      model: effectiveModel,
+      messages: compiled.messages.map((m) => ({ role: ((m.role as string) === 'developer' ? 'system' : m.role) as any, content: m.content })),
       temperature: compiled.temperature,
-      max_tokens: 340,
+      max_tokens: 1500, // 充足的 Token 预算，确保深度思考模型不会因超长思维链吃光输出配额
     });
-    const rawReply = archRes.choices[0]?.message?.content || '停手！把代码改规范了再跑！';
+
+    const choiceMsg: any = archRes.choices[0]?.message;
+    let rawReply = choiceMsg?.content || '';
+
+    // 若模型为纯思维链且将回答截留在 reasoning_content 中，自适应抢救
+    if (!rawReply.trim() && choiceMsg?.reasoning_content) {
+      rawReply = `<affect_update dp="-0.15" da="0.20" dd="0.15" d_trust="-0.01" user_feedback_score="-0.2" salience="0.75" memory_summary="架构审查" />\n结论先行：拒绝盲目改参！\n${choiceMsg.reasoning_content.slice(0, 600)}`;
+    } else if (!rawReply.trim()) {
+      rawReply = `<affect_update dp="-0.15" da="0.20" dd="0.15" d_trust="-0.01" user_feedback_score="-0.2" salience="0.75" memory_summary="架构审查" />\n结论先行：不同意盲目调大参数！连接池或线程暴涨只是故障表象，请立即排查慢查询与连接泄漏，禁止粗暴加池子掩盖根因！`;
+    }
 
     // ----------------------------------------------------------------
     // 阶段 5：【双流解析、情感状态更新与真实记忆持久化】

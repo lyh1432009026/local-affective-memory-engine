@@ -149,11 +149,16 @@ app.post('/v1/config', async (c) => {
     process.env.DEEPSEEK_API_KEY = body.deepseek_api_key;
   }
 
-  // 热更新 client
+  // 热更新 client 与竞技场引擎
   cloudClient = new OpenAI({
     apiKey: process.env.CLOUD_API_KEY || 'sk-placeholder',
     baseURL: process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1',
   });
+  arenaManager.updateUpstreamConfig(
+    process.env.CLOUD_API_KEY || 'sk-placeholder',
+    process.env.CLOUD_BASE_URL || 'https://api.deepseek.com/v1',
+    process.env.CLOUD_MODEL || 'deepseek-chat'
+  );
 
   // 同步写回 .env
   try {
