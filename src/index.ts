@@ -39,6 +39,14 @@ let cloudClient = new OpenAI({
 const app = new Hono();
 
 app.use('*', cors());
+app.use('*', async (c, next) => {
+  const method = c.req.method;
+  const path = c.req.path;
+  if (path !== '/health') {
+    console.log(`[HTTP ${new Date().toLocaleTimeString()}] ${method} ${path}`);
+  }
+  await next();
+});
 
 const getDashboardHtml = () => {
   const p1 = path.join(process.cwd(), 'public', 'index.html');
@@ -936,18 +944,53 @@ app.post('/v1/responses', async (c) => {
   }
 
   const respId = 'resp_' + crypto.randomUUID().replace(/-/g, '');
+  const msgId = 'msg_' + crypto.randomUUID().replace(/-/g, '');
 
   return streamSSE(c, async (sseStream) => {
     const parser = new DualStreamParser();
     let extractedHeader: AffectUpdateHeader | null = null;
     let cleanAssistantReply = '';
 
-    // 发送标准 Responses API 创建事件
+    // 1. response.created 事件
     await sseStream.writeSSE({
-      event: 'response.created',
       data: JSON.stringify({
         type: 'response.created',
-        response: { id: respId, status: 'in_progress', model: targetModel }
+        response: {
+          id: respId,
+          object: 'response',
+          status: 'in_progress',
+          model: targetModel,
+          output: []
+        }
+      })
+    });
+
+    // 2. response.output_item.added 事件（Codex UI 实例化助手消息气泡必选）
+    await sseStream.writeSSE({
+      data: JSON.stringify({
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: {
+          id: msgId,
+          type: 'message',
+          status: 'in_progress',
+          role: 'assistant',
+          content: []
+        }
+      })
+    });
+
+    // 3. response.content_part.added 事件（Codex UI 文本流缓冲区必选）
+    await sseStream.writeSSE({
+      data: JSON.stringify({
+        type: 'response.content_part.added',
+        item_id: msgId,
+        output_index: 0,
+        content_index: 0,
+        part: {
+          type: 'output_text',
+          text: ''
+        }
       })
     });
 
@@ -966,22 +1009,14 @@ app.post('/v1/responses', async (c) => {
 
         if (safeText) {
           cleanAssistantReply += safeText;
-          // 发送 Responses API 标准输出增量事件
+          // 4. response.output_text.delta 逐字流式增量（符合 Codex Agent Loop 官方规范）
           await sseStream.writeSSE({
-            event: 'response.output_text.delta',
             data: JSON.stringify({
               type: 'response.output_text.delta',
-              delta: safeText,
-              item_id: 'msg_0',
+              item_id: msgId,
               output_index: 0,
-              content_index: 0
-            })
-          });
-          // 同时发送兼容 Chat Completions 的 delta，双向兜底
-          await sseStream.writeSSE({
-            data: JSON.stringify({
-              id: respId,
-              choices: [{ delta: { content: safeText }, index: 0 }]
+              content_index: 0,
+              delta: safeText
             })
           });
         }
@@ -992,51 +1027,75 @@ app.post('/v1/responses', async (c) => {
         if (tailFlush) {
           cleanAssistantReply += tailFlush;
           await sseStream.writeSSE({
-            event: 'response.output_text.delta',
             data: JSON.stringify({
               type: 'response.output_text.delta',
-              delta: tailFlush,
-              item_id: 'msg_0',
+              item_id: msgId,
               output_index: 0,
-              content_index: 0
+              content_index: 0,
+              delta: tailFlush
             })
           });
         }
       }
 
-      // 发送输出完成事件
+      // 5. response.output_text.done 文本流生成完毕
       await sseStream.writeSSE({
-        event: 'response.output_text.done',
         data: JSON.stringify({
           type: 'response.output_text.done',
-          text: cleanAssistantReply,
-          item_id: 'msg_0',
+          item_id: msgId,
           output_index: 0,
-          content_index: 0
+          content_index: 0,
+          text: cleanAssistantReply
         })
       });
 
-      // 发送完整 response.completed
+      // 6. response.output_item.done 消息气泡完成
       await sseStream.writeSSE({
-        event: 'response.completed',
         data: JSON.stringify({
-          type: 'response.completed',
-          response: {
-            id: respId,
+          type: 'response.output_item.done',
+          output_index: 0,
+          item: {
+            id: msgId,
+            type: 'message',
             status: 'completed',
-            model: targetModel,
-            output: [
+            role: 'assistant',
+            content: [
               {
-                id: 'msg_0',
-                type: 'message',
-                role: 'assistant',
-                content: [{ type: 'output_text', text: cleanAssistantReply }]
+                type: 'output_text',
+                text: cleanAssistantReply
               }
             ]
           }
         })
       });
 
+      // 7. response.completed 整个回合圆满结束
+      await sseStream.writeSSE({
+        data: JSON.stringify({
+          type: 'response.completed',
+          response: {
+            id: respId,
+            object: 'response',
+            status: 'completed',
+            model: targetModel,
+            output: [
+              {
+                id: msgId,
+                type: 'message',
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'output_text',
+                    text: cleanAssistantReply
+                  }
+                ]
+              }
+            ]
+          }
+        })
+      });
+
+      // 8. 标准终止标识
       await sseStream.writeSSE({ data: '[DONE]' });
     } catch (streamErr: any) {
       console.error('[Responses API SSE Error]:', streamErr);
