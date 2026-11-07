@@ -73,13 +73,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'switch_persona_soul',
-        description: '动态切换全局激活的人设灵魂（支持：kunkun/坤坤、lu_xueqi/陆雪琪、miao_miao/林小狸、nova/诺娃、su_qing/苏清歌）。',
+        description: '动态切换全局激活的人设灵魂（支持：kunkun/坤坤、lu_xueqi/陆雪琪、wen_yan/温言、chen_gong/陈工、zhou_lan/周岚）。',
         inputSchema: {
           type: 'object',
           properties: {
             persona_id: {
               type: 'string',
-              description: '目标角色 ID (kunkun | lu_xueqi | miao_miao | nova | su_qing)',
+              description: '目标角色 ID (kunkun | lu_xueqi | wen_yan | chen_gong | zhou_lan)',
             },
           },
           required: ['persona_id'],
