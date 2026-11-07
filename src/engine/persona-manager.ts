@@ -558,12 +558,29 @@ export class PersonaManager {
   }
 
   /**
-   * 将人设重置回初始预设
+   * 将人设彻底重置回官方纯净初始预设（物理清除自定义脏数据/法则/事实图谱/行为标本，保留激活状态）
    */
   public resetPersonaToPreset(personaId: string): boolean {
     const preset = INITIAL_PERSONA_PRESETS[personaId];
     if (!preset) return false;
-    this.savePreset(personaId, preset, Date.now());
+
+    const current = this.getPersona(personaId);
+    const wasActive = current ? current.is_active : false;
+    const now = Date.now();
+
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM persona_profiles WHERE persona_id = ?').run(personaId);
+      this.db.prepare('DELETE FROM affective_state WHERE persona_id = ?').run(personaId);
+      this.db.prepare('DELETE FROM behavioral_policies WHERE persona_id = ?').run(personaId);
+      this.db.prepare('DELETE FROM relational_graph WHERE persona_id = ?').run(personaId);
+      this.db.prepare('DELETE FROM organic_episodes WHERE persona_id = ?').run(personaId);
+
+      const clonePreset = JSON.parse(JSON.stringify(preset));
+      clonePreset.profile.is_active = wasActive;
+      this.savePreset(personaId, clonePreset, now);
+    });
+
+    tx();
     return true;
   }
 }
