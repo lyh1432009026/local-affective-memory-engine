@@ -59,7 +59,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'record_cognitive_fact',
-        description: '向认知实体图谱注入一条主谓宾三元组事实（如：宝 喜好 独立游戏），同主谓新事实会自动覆写过期设定。',
+        description: '向认知实体图谱注入一条主谓宾三元组事实（如：刘二蛋 喜好 独立游戏），同主谓新事实会自动覆写过期设定。',
         inputSchema: {
           type: 'object',
           properties: {
