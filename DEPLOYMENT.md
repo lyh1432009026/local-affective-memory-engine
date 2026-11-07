@@ -227,6 +227,32 @@ refs:
 ### 3. 重启生效
 保存上述两个文件，**完全重启 DeepSeek Harness**，默认聊天模型即已切换为端口 4100 的本地伴生引擎！
 
+### 4. 作为 DSH 智能体专属 MCP 工具挂载（双剑合璧 · 主动调用）
+除了将引擎作为底层大模型网关透明中转外，DSH 原生支持以 MCP 协议挂载本引擎作为 Agent 工具集：
+
+1. **安装 DSH 官方 MCP 客户端插件**（已在本地环境就绪）：
+   ```bash
+   dsh plugin --profile desktop add @deepseek-ai/dsh-mcp-client@0.0.1-rc.1
+   ```
+2. **在 `~/.dsh/profiles/desktop/cordis.patch.yml` 中注册本 MCP 服务**：
+   ```yaml
+   - id: mcp-affective-engine
+     name: "@deepseek-ai/dsh-mcp-client"
+     config:
+       serverName: affective_engine
+       transport: stdio
+       command: node
+       args:
+         - "C:/Users/14320/WorkBuddy/2026-11-05-20-31-16/dist/mcp.js"
+   ```
+3. **重启 DSH 客户端**：
+   DSH 内置 Agent 会自动获得以下 5 大官方 MCP 神器：
+   * `mcp__affective_engine__query_affective_memory`：主动语义检索长期情景记忆与 2000 字展开载荷
+   * `mcp__affective_engine__get_affective_state`：实时探测 PAD 情绪值、亲密度与行为姿态
+   * `mcp__affective_engine__record_cognitive_fact`：动态注入主谓宾实体知识图谱
+   * `mcp__affective_engine__switch_persona_soul`：动态切换人设灵魂（陆雪琪、坤坤、林小狸、诺娃、苏清歌）
+   * `mcp__affective_engine__trigger_sleep_consolidation`：手动触发仿生睡眠聚类篇章归档
+
 ---
 
 ## 五、 第三方通用客户端接入指南（Cursor / NextChat / Cherry Studio）
