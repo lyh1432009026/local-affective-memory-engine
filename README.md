@@ -369,16 +369,25 @@ local-affective-memory-engine/
 - [x] **v2.0**：废弃人工台词种子库，全面升级为 0 样本冷启动 + 隐式反馈 Bandit 自强化。
 - [x] **v2.2**：SQLite-Vec 分区键加固、施密特迟滞防抖、3分钟闪回不应期、Tool Loop 跨步挂起保护。
 - [x] **v2.3**：针对 RTX 2070 定制 Jev 前置单步 Logits 决策引擎，实现 50ms 零滞后与双模无感降级。
-- [x] **v2.4**：
+- [x] **v2.4（当前正式版）**：
   - [x] 20~100 天单窗口超长对话抗压缩重锚定与全量冷备份架构；
   - [x] 60字头 + 2000字载荷双层解耦与仿生睡眠巩固；
-  - [x] 多角色灵魂塑造（坤坤、陆雪琪、阿坚等）与 Web/CLI 调教工作台；
-  - [x] **一键 Docker 容器化镜像体系**；
+  - [x] 五维高能人设灵魂矩阵（坤坤、陆雪琪、林小狸、诺娃、苏清歌）与 Web/CLI 调教工作台；
+  - [x] **一键 Docker 容器化多阶段镜像体系**；
   - [x] **免安装绿色桌面客户端（Electron）开箱即用体系**。
-- [ ] **v2.5（规划中）**：
-  - [ ] 跨端多设备记忆实时点对点加密同步；
+- [ ] **v2.5（进行中 · MCP 协议封装与主流 Agent 生态无缝适配）**：
+  - [ ] **官方标准 MCP (Model Context Protocol) Server 协议层封装**：
+    - 将长程记忆检索（`query_episodic_memory`）、心境与决策姿态（`get_affective_state`）、事实图谱操作（`record_fact_triple`）及人设切换（`switch_persona`）标准化暴露为标准 MCP Tools / Resources；
+    - **全场景 Agent 生态即插即用**：
+      - 📱 **Claude Desktop**：一键挂载进 `claude_desktop_config.json`，成为 Claude 官方桌面的永久认知外挂；
+      - 💻 **Cursor / Windsurf / VSCode (Cline / Continue)**：直接作为 Agent 扩展工具调用，编码时跨会话记忆工程规范与避坑经历；
+      - 🤖 **Dify / FastGPT / Coze / WorkBuddy**：提供标准 OpenAPI / MCP 接入连接器，作为团队 Agent 共享伴生记忆中枢；
+      - 🐍 **LangChain / LlamaIndex / CrewAI / AutoGen**：发布官方 Python / TS 适配器，作为跨会话持久心智 Memory Provider；
+  - [ ] **SillyTavern（酒馆生态）原生适配**：支持 Tavern V2 角色卡（`.json` / `.png` 隐写块）一键无缝解析导入初始 PAD 基态与行为法则；
+- [ ] **v2.6（规划中）**：
+  - [ ] 跨端多设备端到端加密记忆点对点实时同步（P2P Encrypted Sync）；
   - [ ] 多模态语音情感韵律与情绪声调合成（TTS PAD 染色）；
-  - [ ] 知识库本地 RAG 文档无损混合切片与协同挂载。
+  - [ ] 知识库本地 RAG 文档无损混合切片与伴生记忆协同检索。
 
 ---
 

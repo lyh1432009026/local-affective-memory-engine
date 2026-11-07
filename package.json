@@ -13,6 +13,8 @@
     "client:dev": "npm run build && electron dist-electron/main.js",
     "client:pack": "npm run build && node scripts/bundle-portable.js",
     "client:dist": "npm run build && electron-builder",
+    "mcp": "node dist/mcp.js",
+    "mcp:dev": "tsx src/mcp.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "init": "tsx scripts/bootstrap.ts",
     "persona": "tsx scripts/persona-cli.ts",
@@ -79,6 +81,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@huggingface/transformers": "^3.3.3",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "better-sqlite3": "^11.8.1",
     "dotenv": "^16.4.7",
     "hono": "^4.6.14",

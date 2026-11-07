@@ -73,13 +73,55 @@
 * **`npx` 快速启动与环境自检脚本**：
   完善 `scripts/bootstrap.ts`，自动检测国内网络环境并无缝切换 `hf-mirror.com`，对 `sqlite-vec` 预编译二进制加载失败提供清晰的降级提示。
 
-#### 2. 三大主流生态无缝寄生（流量获取杠杆）
+#### 2. 全面封装 MCP (Model Context Protocol) 标准协议服务（主流 Agent 生态破局中枢）
+
+> **战略意义**：MCP 是 Anthropic 主导、已被各大顶级 Agent / IDE（Claude Desktop, Cursor, Continue, Cline, Dify, LangChain 等）全量接纳的开放标准。  
+> 通过提供标准的 **MCP Server** 协议封装，外部任意 Agent 客户端无需走反向代理，只需在配置中添加一个 MCP 连接，即可**直接把本引擎当作外挂式的“永久记忆与情感状态中枢”**调用！
+
+##### ① 标准 MCP Tools & Resources 暴露清单 (`src/mcp.ts`)
+
+| MCP 暴露方法 / 资源 | 类型 | 输入参数 | 核心功能与返回内容 |
+| :--- | :--- | :--- | :--- |
+| **`query_affective_memory`** | Tool | `query: string, limit?: number` | 四维心境与向量 KNN 混合检索 L1 闪回记忆；相似度高时自动按需展开 2000 字长文本载荷。 |
+| **`get_affective_state`** | Tool | `persona_id?: string` | 读取当前角色的三维 PAD 情绪基态向量、亲密度/信任度慢变量以及当前激活的行为决策姿态。 |
+| **`record_cognitive_fact`** | Tool | `subject: string, predicate: string, object: string` | 动态向 L3 认知图谱注入主谓宾三元组事实（同主谓新设定自动覆写旧设定）。 |
+| **`switch_persona_soul`** | Tool | `persona_id: string` | 动态切换当前激活人设灵魂（坤坤、陆雪琪、林小狸、诺娃、苏清歌等）。 |
+| **`trigger_sleep_consolidation`** | Tool | `force?: boolean` | 手动触发仿生睡眠聚类巩固，归档冗余碎片并生成 L2 阶段叙事篇章。 |
+| **`memory://chapters/recent`** | Resource | 无 | 实时读取最近的阶段叙事篇章摘要，作为长窗口对齐的只读上下文参考。 |
+
+##### ② 主流 Agent 客户端即插即用挂载指南
+
+* **Claude Desktop 官方客户端一键挂载**：
+  在 `claude_desktop_config.json` 中配置：
+  ```json
+  {
+    "mcpServers": {
+      "affective-memory-engine": {
+        "command": "node",
+        "args": ["C:/path/to/local-affective-memory-engine/dist/mcp.js"]
+      }
+    }
+  }
+  ```
+  Claude 在对话或编码时，会自动调用 `query_affective_memory` 唤醒历史工程约束，调用 `get_affective_state` 同步心境默契。
+
+* **Cursor / Windsurf / VSCode (Cline / Continue)**：
+  在 IDE MCP 设置中添加命令，代码助手将在每次生成前自动探查团队长期架构规则与避坑历史。
+
+* **Dify / FastGPT / WorkBuddy / Coze 等 Agent 工作流平台**：
+  通过标准 MCP SSE 或 OpenAPI 端点，直接作为节点或全局 Memory 插件插入复杂 Agent 编排链路。
+
+* **LangChain / LlamaIndex / CrewAI / AutoGen 框架**：
+  提供标准 Memory Provider 抽象类，多 Agent 智能体协同作战时共享同一份情感动力学账本与冷归档记忆。
+
+---
+
+#### 3. 酒馆与开源聊天生态无缝寄生（流量获取杠杆）
 
 | 目标生态 | 工程改造内容 | 预期获客效果 |
 | :--- | :--- | :--- |
 | **1. SillyTavern（酒馆生态）** | 在 `PersonaManager` 中新增 **Tavern Card V2 (`.json` / `.png` 隐写块) 一键导入接口**；自动将角色卡的 `personality` / `mes_example` 解析为初始 PAD 基态与行为法则。 | 直接切入全球最活跃的 AI 伴侣与角色扮演玩家群体，解决酒馆玩家最头疼的“聊满 30 轮崩人设”痛点。 |
-| **2. MCP 协议生态（Claude / Cursor / IDE）** | 新增轻量级 `src/mcp.ts`，将 `recall_affective_memory`、`get_current_mood_policy`、`commit_milestone` 封装为标准 MCP Server。 | 切入 AI Coding 开发者群体，让各种 IDE 插件共享同一套持久工程记忆与协作默契。 |
-| **3. OpenWebUI / Dify / NextChat** | 在 `docs/integrations/` 下提供 3 分钟图文配置指南（仅需替换 Base URL 为 `http://localhost:4100/v1`）。 | 零代码侵入接管现有千万级开源聊天前端用户。 |
+| **2. OpenWebUI / NextChat / Cherry Studio** | 提供开箱即用的 Base URL 配置模板与联网排坑助手。 | 零代码侵入接管现有千万级开源聊天前端用户。 |
 
 ---
 
