@@ -784,6 +784,320 @@ app.post('/v1/chat/completions', async (c) => {
   });
 });
 
+// ====================================================================
+// 【OpenAI 新一代 Responses API 兼容路由 (/v1/responses)】
+// 专为 Codex / Copilot / 新版 OpenAI SDK 客户端提供原生 Responses 协议支持
+// ====================================================================
+app.post('/v1/responses', async (c) => {
+  const body = await c.req.json();
+  const targetPersonaId = body.persona_id || c.req.header('x-persona-id') || personaManager.getActivePersonaId();
+
+  const affectEngine = new AffectiveEngine(db, targetPersonaId);
+  const rlManager = new ImplicitRLManager(db, targetPersonaId);
+  const memoryRetriever = new MemoryRetriever(db, targetPersonaId);
+  const compiler = new ContextCompiler(db, targetPersonaId);
+  const consolidator = new MemoryConsolidator(db, targetPersonaId);
+
+  // 1. 将 Responses API 的 input 与 instructions 规整为标准的 rawMessages 数组
+  let rawMessages: ChatMessage[] = [];
+  if (body.instructions && typeof body.instructions === 'string') {
+    rawMessages.push({ role: 'system', content: body.instructions });
+  }
+
+  if (Array.isArray(body.messages)) {
+    rawMessages.push(...body.messages);
+  } else if (typeof body.input === 'string') {
+    rawMessages.push({ role: 'user', content: body.input });
+  } else if (Array.isArray(body.input)) {
+    for (const item of body.input) {
+      if (typeof item === 'string') {
+        rawMessages.push({ role: 'user', content: item });
+      } else if (item && typeof item === 'object') {
+        const role = item.role || (item.type === 'message' ? item.role : 'user') || 'user';
+        let content = '';
+        if (typeof item.content === 'string') {
+          content = item.content;
+        } else if (Array.isArray(item.content)) {
+          content = item.content.map((p: any) => p.text || (typeof p === 'string' ? p : '')).join('\n');
+        } else if (item.text) {
+          content = item.text;
+        }
+        rawMessages.push({ role, content });
+      }
+    }
+  }
+
+  const lastMsg = rawMessages[rawMessages.length - 1];
+  const userText = typeof lastMsg?.content === 'string' ? lastMsg.content : '';
+
+  const isJsonFormat = body.text?.format?.type === 'json_object' || body.text?.format?.type === 'json_schema';
+  const forceTool = body.tool_choice === 'required' || typeof body.tool_choice === 'object';
+  const isToolRole = lastMsg?.role === 'tool';
+  const isOverrideScenario = isJsonFormat || forceTool || isToolRole;
+
+  // 0. 长窗口防护与压缩检测重锚定
+  consolidator.maybeConsolidateOnWakeup();
+  if (!isOverrideScenario) {
+    rawMessages = consolidator.enforceSlidingWindow(rawMessages);
+  }
+  const reanchorChapters = !isOverrideScenario
+    ? consolidator.detectCompactionAndReanchor({ messages: rawMessages, userText, assistantReply: '', activePolicyName: '', tonicMood: { p: 0, a: 0, d: 0 } })
+    : [];
+
+  // 1. 取出上一轮待验收快照，并并发执行：本地 ONNX 向量化 + RTX 2070 Jev 评估
+  const pendingSnapshot = !isOverrideScenario ? rlManager.consumePendingTurnAtomically() : null;
+  let tonicState = affectEngine.getTonicStateWithTimeDecay();
+
+  const [queryVec, jevEval]: [Float32Array, JevTurnEvaluation | null] = await Promise.all([
+    userText ? embedText(userText) : Promise.resolve(new Float32Array(512)),
+    preferJevMode && !isOverrideScenario && userText
+      ? localJev.evaluateTurn(userText, pendingSnapshot)
+      : Promise.resolve(null),
+  ]);
+
+  const useJevPreDecision = jevEval !== null;
+
+  // 2. 若 Jev 评估成功：当轮前置零滞后更新 Tonic 基态
+  if (useJevPreDecision && jevEval) {
+    const gatedDp = jevEval.deltaP.confidence >= 0.55 ? jevEval.deltaP.value : 0;
+    const gatedDa = jevEval.deltaA.confidence >= 0.55 ? jevEval.deltaA.value : 0;
+    tonicState = affectEngine.applyAffectDeltaToTonic(tonicState, {
+      dp: gatedDp,
+      da: gatedDa,
+      dd: jevEval.deltaD,
+      dTrust: jevEval.dTrust,
+      userFeedbackScore: jevEval.userFeedback.confidence >= 0.50 ? jevEval.userFeedback.value : 0,
+      activePolicyName: tonicState.lastActivePolicy,
+    });
+  }
+
+  // 3. 四维心境一致性召回
+  const recalledMemories = userText
+    ? memoryRetriever.retrieveHybridMemories(queryVec, tonicState, 4)
+    : [];
+  const phasicMood = affectEngine.computePhasicMoodWithMemories(tonicState, recalledMemories);
+
+  // 4. 编译请求
+  const compiled = compiler.compileMessages(rawMessages, phasicMood, recalledMemories, [], {
+    isJsonResponseFormat: isJsonFormat,
+    forceToolChoice: forceTool,
+    omitInlineAffectTag: useJevPreDecision,
+    recentNarrativeChapters: reanchorChapters,
+  });
+
+  c.header('X-Accel-Buffering', 'no');
+
+  const defaultModel = process.env.CLOUD_MODEL || 'gemini-3.8-flash';
+  let targetModel = body.model || defaultModel;
+  const isDeepSeekUpstream = (process.env.CLOUD_BASE_URL || '').includes('deepseek.com');
+  if (!isDeepSeekUpstream && (targetModel.includes('deepseek') || targetModel === 'default' || targetModel === 'auto')) {
+    targetModel = defaultModel;
+  }
+
+  const isGemini = String(targetModel || '').toLowerCase().includes('gemini');
+  const reqPayload: any = {
+    model: targetModel,
+    messages: compiled.messages,
+    temperature: compiled.temperature,
+    stream: true,
+  };
+  if (!isGemini && compiled.presencePenalty > 0) {
+    reqPayload.presence_penalty = compiled.presencePenalty;
+  }
+
+  let stream: any;
+  try {
+    stream = await cloudClient.chat.completions.create(reqPayload);
+  } catch (apiErr: any) {
+    if (pendingSnapshot) {
+      try { rlManager.savePendingTurn(pendingSnapshot); } catch {}
+    }
+    const statusCode = apiErr.status || 500;
+    return c.json({
+      error: {
+        message: apiErr.message || 'Upstream Model API Gateway Error',
+        type: apiErr.type || 'api_error',
+        code: statusCode,
+      },
+    }, statusCode);
+  }
+
+  const respId = 'resp_' + crypto.randomUUID().replace(/-/g, '');
+
+  return streamSSE(c, async (sseStream) => {
+    const parser = new DualStreamParser();
+    let extractedHeader: AffectUpdateHeader | null = null;
+    let cleanAssistantReply = '';
+
+    // 发送标准 Responses API 创建事件
+    await sseStream.writeSSE({
+      event: 'response.created',
+      data: JSON.stringify({
+        type: 'response.created',
+        response: { id: respId, status: 'in_progress', model: targetModel }
+      })
+    });
+
+    try {
+      for await (const part of (stream as any)) {
+        const delta = part.choices?.[0]?.delta;
+        const text = delta?.content || '';
+        if (!text) continue;
+
+        let safeText = text;
+        if (!useJevPreDecision && !compiled.isCognitiveOverride) {
+          safeText = parser.pushChunk(text, (header) => {
+            extractedHeader = header;
+          });
+        }
+
+        if (safeText) {
+          cleanAssistantReply += safeText;
+          // 发送 Responses API 标准输出增量事件
+          await sseStream.writeSSE({
+            event: 'response.output_text.delta',
+            data: JSON.stringify({
+              type: 'response.output_text.delta',
+              delta: safeText,
+              item_id: 'msg_0',
+              output_index: 0,
+              content_index: 0
+            })
+          });
+          // 同时发送兼容 Chat Completions 的 delta，双向兜底
+          await sseStream.writeSSE({
+            data: JSON.stringify({
+              id: respId,
+              choices: [{ delta: { content: safeText }, index: 0 }]
+            })
+          });
+        }
+      }
+
+      if (!useJevPreDecision && !compiled.isCognitiveOverride) {
+        const tailFlush = parser.flush();
+        if (tailFlush) {
+          cleanAssistantReply += tailFlush;
+          await sseStream.writeSSE({
+            event: 'response.output_text.delta',
+            data: JSON.stringify({
+              type: 'response.output_text.delta',
+              delta: tailFlush,
+              item_id: 'msg_0',
+              output_index: 0,
+              content_index: 0
+            })
+          });
+        }
+      }
+
+      // 发送输出完成事件
+      await sseStream.writeSSE({
+        event: 'response.output_text.done',
+        data: JSON.stringify({
+          type: 'response.output_text.done',
+          text: cleanAssistantReply,
+          item_id: 'msg_0',
+          output_index: 0,
+          content_index: 0
+        })
+      });
+
+      // 发送完整 response.completed
+      await sseStream.writeSSE({
+        event: 'response.completed',
+        data: JSON.stringify({
+          type: 'response.completed',
+          response: {
+            id: respId,
+            status: 'completed',
+            model: targetModel,
+            output: [
+              {
+                id: 'msg_0',
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: cleanAssistantReply }]
+              }
+            ]
+          }
+        })
+      });
+
+      await sseStream.writeSSE({ data: '[DONE]' });
+    } catch (streamErr: any) {
+      console.error('[Responses API SSE Error]:', streamErr);
+      if (pendingSnapshot) {
+        try { rlManager.savePendingTurn(pendingSnapshot); } catch {}
+      }
+      await sseStream.writeSSE({
+        data: JSON.stringify({
+          error: { message: streamErr.message || 'Stream interrupted', type: 'stream_error' },
+        }),
+      });
+      await sseStream.writeSSE({ data: '[DONE]' });
+      return;
+    }
+
+    // 后置异步状态机结算与记忆冷归档
+    setImmediate(async () => {
+      try {
+        const effectiveReply = cleanAssistantReply.trim();
+        if (!compiled.isCognitiveOverride && effectiveReply.length > 0) {
+          rlManager.savePendingTurn({
+            turnId: crypto.randomUUID(),
+            userPrompt: userText,
+            userPromptEmbedding: Array.from(queryVec),
+            assistantReply: effectiveReply,
+            moodAtTurn: phasicMood,
+            actionPolicy: compiled.activePolicyName,
+            referencedEpisodeIds: compiled.referencedEpisodeIds,
+            referencedPolicyIds: compiled.referencedPolicyIds,
+            timestampMs: Date.now(),
+          });
+        }
+
+        if (useJevPreDecision && jevEval) {
+          if (pendingSnapshot && jevEval.isTopicShift.prob < 0.72) {
+            let effectiveFeedback = jevEval.userFeedback.confidence >= 0.50 ? jevEval.userFeedback.value : 0.05;
+            if (jevEval.isTechLogPaste.prob >= 0.65 && effectiveFeedback < 0) {
+              effectiveFeedback = 0.05;
+            }
+            rlManager.settlePreviousTurnReward(pendingSnapshot, effectiveFeedback, userText, queryVec);
+          }
+          if (jevEval.shouldMemorize.prob >= 0.78 && userText.length >= 6 && effectiveReply.length > 0) {
+            const conciseSummary = userText.replace(/\s+/g, ' ').slice(0, 45);
+            memoryRetriever.commitEpisodicMemory(conciseSummary, effectiveReply, tonicState, jevEval.shouldMemorize.prob, queryVec, effectiveReply);
+          }
+        } else if (extractedHeader) {
+          const header = extractedHeader as AffectUpdateHeader;
+          rlManager.settlePreviousTurnReward(pendingSnapshot, header.userFeedbackScore, userText, queryVec);
+          const updatedTonic = affectEngine.applyAffectDeltaToTonic(tonicState, {
+            ...header,
+            activePolicyName: compiled.activePolicyName,
+          });
+          if (header.memorySummary && header.salience >= 0.35 && effectiveReply.length > 0) {
+            const memVec = await embedText(header.memorySummary);
+            memoryRetriever.commitEpisodicMemory(header.memorySummary, effectiveReply, updatedTonic, header.salience, memVec);
+          }
+        }
+
+        if (effectiveReply.length > 0) {
+          consolidator.archiveTurn({
+            messages: rawMessages,
+            userText,
+            assistantReply: effectiveReply,
+            activePolicyName: compiled.activePolicyName,
+            tonicMood: { p: tonicState.p, a: tonicState.a, d: tonicState.d },
+          });
+        }
+      } catch (bgErr) {
+        console.error('[CRITICAL Background Task Error (/v1/responses)]:', bgErr);
+      }
+    });
+  });
+});
+
 const port = Number(process.env.PORT || 4100);
 serve({ fetch: app.fetch, port }, () => {
   console.log(
