@@ -518,6 +518,15 @@ app.get('/v1/arena/chapters', (c) => {
   return c.json({ count: list.length, chapters: list });
 });
 
+// 安全清洗与归一化模型角色（将 OpenAI o1/Codex 新引入的 developer 角色安全降级为上游通用的 system，防止 422 校验失败）
+function sanitizeRole(role: string | undefined): 'system' | 'user' | 'assistant' | 'tool' {
+  const r = String(role || '').toLowerCase();
+  if (r === 'developer' || r === 'system') return 'system';
+  if (r === 'assistant') return 'assistant';
+  if (r === 'tool') return 'tool';
+  return 'user';
+}
+
 app.post('/v1/chat/completions', async (c) => {
   const body = await c.req.json();
   const targetPersonaId = body.persona_id || c.req.header('x-persona-id') || personaManager.getActivePersonaId();
@@ -528,7 +537,10 @@ app.post('/v1/chat/completions', async (c) => {
   const compiler = new ContextCompiler(db, targetPersonaId);
   const consolidator = new MemoryConsolidator(db, targetPersonaId);
 
-  let rawMessages = body.messages || [];
+  let rawMessages: ChatMessage[] = (body.messages || []).map((m: any) => ({
+    ...m,
+    role: sanitizeRole(m.role),
+  }));
   const lastMsg = rawMessages[rawMessages.length - 1];
   const userText = typeof lastMsg?.content === 'string' ? lastMsg.content : '';
 
@@ -606,7 +618,7 @@ app.post('/v1/chat/completions', async (c) => {
     const reqPayload: any = {
       ...body,
       model: targetModel,
-      messages: compiled.messages,
+      messages: compiled.messages.map(m => ({ role: sanitizeRole(m.role) as any, content: m.content })),
       temperature: compiled.temperature,
       stream: true,
     };
@@ -805,7 +817,7 @@ app.post('/v1/responses', async (c) => {
   }
 
   if (Array.isArray(body.messages)) {
-    rawMessages.push(...body.messages);
+    rawMessages.push(...body.messages.map((m: any) => ({ ...m, role: sanitizeRole(m.role) })));
   } else if (typeof body.input === 'string') {
     rawMessages.push({ role: 'user', content: body.input });
   } else if (Array.isArray(body.input)) {
@@ -813,7 +825,8 @@ app.post('/v1/responses', async (c) => {
       if (typeof item === 'string') {
         rawMessages.push({ role: 'user', content: item });
       } else if (item && typeof item === 'object') {
-        const role = item.role || (item.type === 'message' ? item.role : 'user') || 'user';
+        const rawRole = item.role || (item.type === 'message' ? item.role : 'user') || 'user';
+        const role = sanitizeRole(rawRole);
         let content = '';
         if (typeof item.content === 'string') {
           content = item.content;
@@ -897,7 +910,7 @@ app.post('/v1/responses', async (c) => {
   const isGemini = String(targetModel || '').toLowerCase().includes('gemini');
   const reqPayload: any = {
     model: targetModel,
-    messages: compiled.messages,
+    messages: compiled.messages.map(m => ({ role: sanitizeRole(m.role) as any, content: m.content })),
     temperature: compiled.temperature,
     stream: true,
   };
