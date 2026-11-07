@@ -17,7 +17,7 @@ function printHelp() {
 用法:
   npm run persona -- list                        查看所有人设列表与当前激活人设
   npm run persona -- show [persona_id]           查看指定人设的详细档案、情感基态、行为法则与事实图谱
-  npm run persona -- switch <persona_id>         切换当前激活人设（如 kunkun / default / sprint_partner）
+  npm run persona -- switch <persona_id>         切换当前激活人设（如 kunkun / lu_xueqi / miao_miao / nova / su_qing）
   npm run persona -- style <persona_id> <口吻风格> 调教人设表达口吻与句式特征
   npm run persona -- add-rule <id> <触发语境> <行为法则>   调教/新增一条自反思行为法则
   npm run persona -- add-fact <id> <主语> <谓语> <宾语>   调教/注入一条认知实体事实
