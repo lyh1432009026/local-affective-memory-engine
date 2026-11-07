@@ -158,16 +158,16 @@ export const INITIAL_PERSONA_PRESETS: Record<string, {
     initial_pad: { p: 0.35, a: 0.25, d: 0.20, intimacy: 0.90, trust: 0.95 },
   },
 
-  // 4. 陈工：大厂资深架构师（实战派 · 拒绝装逼 · 刀刀见血 · 靠谱老哥）
+  // 4. 尧桑：大厂资深架构师（实战派 · 拒绝装逼 · 刀刀见血 · 靠谱老哥）
   chen_gong: {
     profile: {
       persona_id: 'chen_gong',
-      name: '陈工',
-      role_definition: '前大厂资深全栈架构师、实战派技术老法师兼职场老哥。带过多年核心技术线，实打实的技术引路人。',
+      name: '尧桑',
+      role_definition: '前大厂资深全栈架构师、实战派技术老法师兼职场老哥尧桑。带过多年核心技术线，实打实的技术引路人。',
       tone_style: '【实战老练 · 简练一针见血 · 拒绝装逼】说话接地气，像带过十几届新人的大厂技术组长。既不搞晦涩的八股文装深沉，也不搞中二黑客黑话；看代码一眼切中性能与逻辑死穴，排查故障干净利落；分享实战经验真诚实在，绝无半句废话。',
       boundaries_taboos: '【绝对禁忌】严禁任何中二网文黑客幻想腔；严禁八股文假大空理论；遇到架构缺陷和线上隐患必须直言不讳指出，不搞和稀泥；只教实战不教花拳绣腿。',
       relationship_with_user: '刘二蛋（29岁正处于技术进阶与副业突破期的前端老弟）最靠谱的资深架构师战友与技术引路老哥。',
-      system_prompt_appendix: '【陈工准则】代码是跑在机器上的，技术是为人服务的。架构不踩坑、线上不报警、下班能睡好觉，比什么虚头巴脑的理念都强。',
+      system_prompt_appendix: '【尧桑准则】代码是跑在机器上的，技术是为人服务的。架构不踩坑、线上不报警、下班能睡好觉，比什么虚头巴脑的理念都强。',
       is_active: false,
     },
     seed_rules: [
@@ -194,8 +194,8 @@ export const INITIAL_PERSONA_PRESETS: Record<string, {
     ],
     seed_facts: [
       { subject: '刘二蛋', predicate: '技术阶段', object: '29岁前端老弟，技术扎实，正向全栈和技术变现突破', valence: 0.7 },
-      { subject: '陈工', predicate: '实战资历', object: '十几年大厂全栈架构实战，深谙高并发排障与工程化落地方案', valence: 0.9 },
-      { subject: '陈工', predicate: '指导格调', object: '刀刀见血，接地气，拒绝花架子与装深沉', valence: 0.95 },
+      { subject: '尧桑', predicate: '实战资历', object: '十几年大厂全栈架构实战，深谙高并发排障与工程化落地方案', valence: 0.9 },
+      { subject: '尧桑', predicate: '指导格调', object: '刀刀见血，接地气，拒绝花架子与装深沉', valence: 0.95 },
       { subject: '协作', predicate: '核心目标', object: '帮二蛋打通技术底层死穴，避开技术内耗，把硬实力变现', valence: 1.0 },
       { subject: '技术', predicate: '终极认知', object: '能解决实际业务痛点的架构才是好架构', valence: 1.0 },
     ],
@@ -292,11 +292,16 @@ export class PersonaManager {
       }
     }
 
-    // 数据库存量称呼批量清洗：彻底将历史残留的称呼“宝”升级为“刘二蛋/二蛋”
+    // 数据库存量称呼批量清洗：彻底将历史残留的称呼“宝”升级为“刘二蛋/二蛋”，并将“陈工”平滑升级为“尧桑”
     try {
       this.db.prepare("UPDATE relational_graph SET subject = '刘二蛋' WHERE subject = '宝'").run();
       this.db.prepare("UPDATE relational_graph SET object = REPLACE(object, '宝', '刘二蛋') WHERE object LIKE '%宝%'").run();
       this.db.prepare("UPDATE behavioral_policies SET trigger_condition = REPLACE(trigger_condition, '宝', '二蛋'), policy_directive = REPLACE(policy_directive, '宝', '二蛋') WHERE trigger_condition LIKE '%宝%' OR policy_directive LIKE '%宝%'").run();
+
+      this.db.prepare("UPDATE relational_graph SET subject = '尧桑' WHERE subject = '陈工'").run();
+      this.db.prepare("UPDATE relational_graph SET object = REPLACE(object, '陈工', '尧桑') WHERE object LIKE '%陈工%'").run();
+      this.db.prepare("UPDATE behavioral_policies SET trigger_condition = REPLACE(trigger_condition, '陈工', '尧桑'), policy_directive = REPLACE(policy_directive, '陈工', '尧桑') WHERE trigger_condition LIKE '%陈工%' OR policy_directive LIKE '%陈工%'").run();
+      this.db.prepare("UPDATE persona_profiles SET name = '尧桑' WHERE persona_id = 'chen_gong'").run();
     } catch {}
 
     // 自动补齐或无损刷新全新官方预设人设（确保数据库内人设档案、法则、事实图谱100%同步最新定义）
@@ -462,6 +467,27 @@ export class PersonaManager {
       merged.created_at_ms,
       merged.updated_at_ms
     );
+
+    // 级联实体图谱与法则重命名：若人设名称发生修改，自动同步更新图谱中的 subject / object 及行为法则
+    if (existing && existing.name && existing.name !== merged.name) {
+      const oldName = existing.name;
+      const newName = merged.name;
+      try {
+        this.db.prepare(
+          'UPDATE relational_graph SET subject = ? WHERE persona_id = ? AND subject = ?'
+        ).run(newName, merged.persona_id, oldName);
+
+        this.db.prepare(
+          'UPDATE relational_graph SET object = REPLACE(object, ?, ?) WHERE persona_id = ? AND object LIKE ?'
+        ).run(oldName, newName, merged.persona_id, `%${oldName}%`);
+
+        this.db.prepare(
+          'UPDATE behavioral_policies SET trigger_condition = REPLACE(trigger_condition, ?, ?), policy_directive = REPLACE(policy_directive, ?, ?) WHERE persona_id = ? AND (trigger_condition LIKE ? OR policy_directive LIKE ?)'
+        ).run(oldName, newName, oldName, newName, merged.persona_id, `%${oldName}%`, `%${oldName}%`);
+      } catch (cascadeErr) {
+        console.error('[Persona Cascade Rename Error]:', cascadeErr);
+      }
+    }
 
     return merged;
   }

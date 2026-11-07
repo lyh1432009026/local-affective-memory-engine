@@ -861,6 +861,7 @@
         if (d.success) {
           showToast('人设修改保存成功！');
           loadPersonas();
+          loadPersonaDetails(payload.persona_id);
         }
       } catch (e) {
         alert('保存失败: ' + e);

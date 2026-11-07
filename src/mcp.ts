@@ -73,7 +73,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'switch_persona_soul',
-        description: '动态切换全局激活的人设灵魂（支持：kunkun/坤坤、lu_xueqi/陆雪琪、wen_yan/温言、chen_gong/陈工、zhou_lan/周岚）。',
+        description: '动态切换全局激活的人设灵魂（支持：kunkun/坤坤、lu_xueqi/陆雪琪、wen_yan/温言、chen_gong/尧桑、zhou_lan/周岚）。',
         inputSchema: {
           type: 'object',
           properties: {
